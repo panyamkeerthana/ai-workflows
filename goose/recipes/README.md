@@ -1,0 +1,1 @@
+This is a directory for placing [Goose recipes](https://block.github.io/goose/docs/guides/session-recipes).
