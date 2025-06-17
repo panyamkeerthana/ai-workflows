@@ -1,1 +1,1 @@
-This is a directory for placing [Goose recipes](https://block.github.io/goose/docs/guides/session-recipes).
+Use `make <recipe>` to run a recipe.  For instance, `make update-centos-package` to run the corresponding .yaml file.
