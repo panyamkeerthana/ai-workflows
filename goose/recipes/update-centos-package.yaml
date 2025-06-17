@@ -1,0 +1,81 @@
+version: 0.1.0
+title: "Update a CentOS package and create a merge request"
+description: "Update the {{ package }} to a newer version"
+
+instructions: |
+  A couple of rules that you must follow and useful information for you:
+    * All packages are in separate Git repositories under the Gitlab project {{ git_url }}
+    * You can find the package at {{ git_url }}/{{ package }}
+    * The Git user name is {{ git_user }}
+    * The Git user's email address is {{ git_email }}
+    * Use {{ gitlab_user }} as the GitLab user.
+    * Work only in a temporary directory that you can create with the mktemp tool.
+    * Always use GitLab's glab CLI tool to create forks and open merge requests.  Do not use the git tool.
+    * You can find packaging guidelines at https://docs.fedoraproject.org/en-US/packaging-guidelines/
+
+# NOTE:
+#  * The Recipe currently assumes that the glab client has already been authenticated against GitLab.
+#  * Going forward, the GitLab token should also be a paramter.
+parameters:
+- key: package
+  input_type: string
+  requirement: required
+  description: Package to update
+- key: git_url
+  input_type: string
+  requirement: required
+  description: URL of the Git repository
+  default: https://gitlab.com/redhat/centos-stream/rpms
+- key: git_branch
+  input_type: string
+  requirement: required
+  description: Git branch of the update
+  default: c10s
+- key: git_user
+  input_type: string
+  requirement: required
+  description: Name of the Git user
+  default: RHEL Packaging Agent
+- key: git_email
+  input_type: string
+  requirement: required
+  description: Email address of the Git users
+  default: rhel-packaging-agent@redhat.com
+- key: gitlab_user
+  input_type: string
+  requirement: required
+  description: Name of the Gitlab user
+  default: vrothberg
+
+prompt: |
+  1. Find the location of the {{ package }} package at {{ git_url }}.  Always use the {{ git_branch }} branch.
+
+  2. Check if there is a newer version of the {{ package }} available.  That includes detecting the current version of the package and the upstream version.
+    * The current version of the package can be found in the Version field of the RPM .spec file.
+    * The latest version of the package can be found in the upstream project of {{ package }}.  Usually, there is a reference to the upstream project inside the .spec file.  That can be the URL field, a comment or references in the changelog.  Prefer references to Git repositories (e.g., GitHub or Gitlab, etc.) over ordinary websites.
+    * If there is no new version available, print a message and exit.  If there is a new version available follow the instructions below.
+    * Do not clone any repository for detecting the versions.
+
+  3. Create a local Git repository by following these steps:
+    * Create a fork of the {{ package }} package using the glab tool.
+    * Clone the fork into the temp directory.
+
+  4. Update the {{ package }} to the newer version:
+    * Create a new branch indicating the update of the package and that it was created by {{ git_user }}.
+    * Update the local package.
+    * Only perform changes relevant for the version update.
+    * Use the rpmlint tool to make sure that changes to the .spec file did not introduce new errors.
+    * Build the local .spec file to make sure all changes are correct.
+    * Do not rename variables or comment existing lines out.
+    * Make sure that the commit looks similar to previous ones in the Git log that update the package version.
+    * Do not change if-else branches.
+
+  5. Commit the changes:
+    * Create a Git commit and use the same format as other Git commits in the Git log for the title and body of the Git commit.
+    * The title of the Git commit should have the prefix "[DO NOT MERGE: AI EXPERIMENTS]"
+
+  6. Open a merge request:
+    * Push the commit.
+    * Open a merge request against the repository of the {{ package }} using the glab tool with previously created commit.
+
+  Follow the above steps in the given order and let me know where you cloned the Git repository.
