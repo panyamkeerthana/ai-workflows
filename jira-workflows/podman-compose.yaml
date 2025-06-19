@@ -19,10 +19,14 @@ services:
       - .env
     volumes:
       - home-goose-persistent:/home/goose
+      - ./recipes:/home/goose/recipes:ro,z
     stdin_open: true
     tty: true
     restart: "no"
-    #entrypoint: ["/usr/bin/bash"]
+    # configure dns for accessing recipes in Github
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
 volumes:
   home-goose-persistent:
