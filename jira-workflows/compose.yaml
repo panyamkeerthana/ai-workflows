@@ -20,6 +20,7 @@ services:
     volumes:
       - home-goose-persistent:/home/goose
       - ./recipes:/home/goose/recipes:ro,z
+      - ./files/goose-config.yaml:/home/goose/.config/goose/config.yaml
     stdin_open: true
     tty: true
     restart: "no"
