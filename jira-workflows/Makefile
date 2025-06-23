@@ -2,41 +2,42 @@
 
 PROJECT ?= RHEL
 COMPONENT ?= cockpit
+COMPOSE ?= podman compose
 
 build:
-	podman-compose build
+	$(COMPOSE) build
 
 # MCP server management
 run-mcp-server:
-	podman-compose up -d mcp-atlassian
+	$(COMPOSE) up -d mcp-atlassian
 
 stop-mcp-server:
-	podman-compose down mcp-atlassian
+	$(COMPOSE) down mcp-atlassian
 
 logs-mcp-server:
-	podman-compose logs -f mcp-atlassian
+	$(COMPOSE) logs -f mcp-atlassian
 
 # Goose commands
 run-goose:
-	podman-compose run --rm goose
+	$(COMPOSE) run --rm goose
 
 run-goose-bash:
-	podman-compose run --rm --entrypoint /usr/bin/bash goose
+	$(COMPOSE) run --rm --entrypoint /usr/bin/bash goose
 
 # run remote workflow taken from goose-config.yaml -> GOOSE_RECIPE_GITHUB_REPO
 run-goose-workflow:
-	podman-compose run --rm \
+	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
 		-c "/usr/local/bin/goose run --recipe check-jira-tickets --params project=$(PROJECT) --params component=$(COMPONENT)"
 
 # run local workflow taken from /home/goose/recipes
 run-goose-local-workflow:
-	podman-compose run --rm \
+	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
 		-c "/usr/local/bin/goose run --recipe recipes/check-jira-tickets/recipe.yaml --params project=$(PROJECT) --params component=$(COMPONENT)"
 
 clean:
-	podman-compose down
+	$(COMPOSE) down
 	podman volume prune -f
 
 help:
