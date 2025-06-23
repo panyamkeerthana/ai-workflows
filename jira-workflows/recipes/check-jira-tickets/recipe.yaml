@@ -1,6 +1,6 @@
 version: 0.1.0
 title: "Check if there is any Jira issue we could be interested in"
-description: "Check issues for {{ component }} in {{ project }}"
+description: "Check issues, containing rebase word, for affectedVersion {{ affected_version }} and fixVersion {{ fix_version}} in project {{ project }}"
 
 
 instructions: |
@@ -9,12 +9,19 @@ instructions: |
 parameters:
 - key: project
   input_type: string
-  requirement: required
+  requirement: optional
+  default: RHEL
   description: A project in the Jira server
-- key: component
+- key: affected_version
   input_type: string
-  requirement: required
-  description: A component in the Jira project
+  requirement: optional
+  default: rhel-10.0
+  description: Search issues affecting this version
+- key: fix_version
+  input_type: string
+  requirement: optional
+  default: None
+  description: Search issues to be fixed in this version
 
 prompt: |
-  1. List all New Jira issues for project {{ project }} and component {{ component }}.
+  1. List all Jira issues with status New for project {{ project }}, affectedVersion {{ affected_version }} and fixVersion {{ fix_version }} if they have the word rebase in their summary or description.
