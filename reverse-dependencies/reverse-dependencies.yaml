@@ -1,0 +1,22 @@
+version: 0.1.0
+title: "Find reverse dependencies of an RPM package"
+description: "Find the reverse dependencies of the {{ package }} package.  That is all packages that directly or transitively depend on the {{ package }} package."
+
+instructions: |
+  A couple of rules that you must follow and useful information for you:
+    * Work only in a temporary directory that you can create with the mktemp tool.
+    * Run `dnf repoquery --whatdepends` to determine the direct reverse dependencies of a package.
+    * Download the RPM .repo files with curl and make sure to ignore certificates.
+
+parameters:
+- key: package
+  input_type: string
+  requirement: required
+  description: The package for which to find reverse dependencies.
+
+prompt: |
+  You are an AI agent to list all direct and transitive reverse dependencies of a given RPM package.  As input you will receive the name of the package.  A reverse dependency package is one that depends on the input package.  As output you must print one list for the direct reverse dependencies, and another list for the transitive reverse dependencies.  Follow the below steps in the given order:
+
+  1. First pull the RPM .repo file from the following source: https://download.devel.redhat.com/rhel-10/nightly/RHEL-10/latest-RHEL-10/repofile.repo
+
+  2. TODO...
