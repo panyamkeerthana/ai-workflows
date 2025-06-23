@@ -34,7 +34,7 @@ run-goose-workflow:
 run-goose-local-workflow:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
-		-c "/usr/local/bin/goose run --recipe recipes/check-jira-tickets/recipe.yaml --params project=$(PROJECT) --params component=$(COMPONENT)"
+		-c "/usr/local/bin/goose run --recipe recipes/check-jira-tickets/recipe.yaml"
 
 clean:
 	$(COMPOSE) down
