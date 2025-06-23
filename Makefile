@@ -34,6 +34,14 @@ check-jira-tickets:
 			--params project=$(PROJECT) \
 			--params component=$(COMPONENT)"
 
+ISSUE ?= RHEL-78418
+.PHONY: issue-details
+issue-details:
+	$(COMPOSE) run --rm \
+		--entrypoint /bin/sh goose \
+		-c "/usr/local/bin/goose run --recipe recipes/issue-details.yaml \
+			--params issue=$(ISSUE)"
+
 PACKAGE ?= podman
 VERSION ?= 5.5.0
 JIRA_ISSUES ?= "12345"

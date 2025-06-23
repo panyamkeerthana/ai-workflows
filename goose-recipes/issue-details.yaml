@@ -1,0 +1,20 @@
+version: 0.1.0
+title: "Analyze details for given issue"
+description: "Check details for issue {{ issue }}."
+
+
+instructions: |
+  - Never create, delete, update or modify an Issue in Jira
+  - fixVersion named rhel-N is mapped in branch named cNs
+
+parameters:
+- key: issue
+  input_type: string
+  requirement: optional
+  default: RHEL-78418
+  description: A Jira issue (the Jira instance is choosen by the mcp server configuration)
+
+prompt: |
+  1. Open the defined Jira issue {{ issue }}.
+  2. Identify the repository (package) referred by the issue and confirm it exist in https://gitlab.com/redhat/centos-stream/rpms/(package), print the found url.
+  3. Identify the branch (for the previous found repository) where to work on, it depends on the fixVersion Jira value, verify the branch exists and print its name.
