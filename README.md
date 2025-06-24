@@ -38,3 +38,12 @@ The recipes are defined in `goose-recipes/`.  If you want to run `goose-recipes/
 
 1. `make <recipe>`
 2. `make clean`
+
+## Development
+
+This project uses [pre-commit](https://pre-commit.com/) hooks. To set up:
+
+```bash
+pip install pre-commit
+pre-commit install
+```

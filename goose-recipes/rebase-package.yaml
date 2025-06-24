@@ -58,7 +58,7 @@ parameters:
 prompt: |
   You are an agent for updating a CentOS package to the provided version. You will prepare the content of the update
   and then create a commit with the changes. Follow exactly these steps:
-  
+
   1. Find the location of the {{ package }} package at {{ git_url }}.  Always use the {{ dist_git_branch }} branch.
 
   2. Check if the {{ package }} was not already updated to version {{ version }}.  That means comparing the current version and provided version.
@@ -79,7 +79,7 @@ prompt: |
       * Downloading sources using `spectool -g -S {{ package }}.spec` (you might need to copy local sources, e.g. if the .spec file loads some macros from them, to a directory where spectool expects them).
       * Uploading the new sources using `centpkg --release {{ dist_git_branch }} new-sources`.
       * Only performing changes relevant to the version update: Do not rename variables, comment out existing lines, or alter if-else branches in the .spec file.
-      
+
   5. Verify and adjust the changes:
     * Use `rpmlint` to validate your .spec file changes and fix any new errors it identifies.
     * Generate the SRPM using `rpmbuild -bs` (ensure your .spec file and source files are correctly copied to the build environment as required by the command).
@@ -96,5 +96,3 @@ prompt: |
 #    * Open a merge request against the repository of the {{ package }} using the glab tool with previously created commit.
 #  8. Comment on each Jira issue from {{ jira_issues }} in https://issues.redhat.com using Jira API this content:
 #     Automated MR for the update created in <url-of-the-created-gitlab-mr>.
-
-
