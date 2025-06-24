@@ -42,9 +42,9 @@ issue-details:
 		-c "/home/goose/wait_mcp_server.sh && /usr/local/bin/goose run --recipe recipes/issue-details.yaml \
 			--params issue=$(ISSUE)"
 
-PACKAGE ?= podman
-VERSION ?= 5.5.0
-JIRA_ISSUES ?= "12345"
+PACKAGE ?= cockpit
+VERSION ?= 339
+JIRA_ISSUES ?= "RHEL-123"
 .PHONY: rebase-package
 rebase-package:
 	$(COMPOSE) run --rm \
