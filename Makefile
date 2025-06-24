@@ -30,7 +30,7 @@ COMPONENT ?= cockpit
 check-jira-tickets:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
-		-c "/usr/local/bin/goose run --recipe recipes/check-jira-tickets.yaml \
+		-c "/home/goose/wait_mcp_server.sh && /usr/local/bin/goose run --recipe recipes/check-jira-tickets.yaml \
 			--params project=$(PROJECT) \
 			--params component=$(COMPONENT)"
 
@@ -39,7 +39,7 @@ ISSUE ?= RHEL-78418
 issue-details:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
-		-c "/usr/local/bin/goose run --recipe recipes/issue-details.yaml \
+		-c "/home/goose/wait_mcp_server.sh && /usr/local/bin/goose run --recipe recipes/issue-details.yaml \
 			--params issue=$(ISSUE)"
 
 PACKAGE ?= podman
