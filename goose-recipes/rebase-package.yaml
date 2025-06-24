@@ -16,10 +16,6 @@ instructions: |
     * Do not run the `centpkg new-sources` command for now (testing purposes), just write down the commands you would run.
 
 
-# TODO:
-# * handle authentication requirements: Gitlab, Jira, centpkg
-# * handle environment requirements: rpm-build, spectool, rpmdevtools, rpmlint, centpkg, git, glab
-
 parameters:
 - key: package
   input_type: string
@@ -62,7 +58,7 @@ parameters:
 prompt: |
   You are an agent for updating a CentOS package to the provided version. You will prepare the content of the update
   and then create a commit with the changes. Follow exactly these steps:
-  
+
   1. Find the location of the {{ package }} package at {{ git_url }}.  Always use the {{ dist_git_branch }} branch.
 
   2. Check if the {{ package }} was not already updated to version {{ version }}.  That means comparing the current version and provided version.
@@ -77,21 +73,17 @@ prompt: |
   4. Update the {{ package }} to the newer version:
     * Create a new Git branch named `automated-packaging-update-{{ version }}`.
     * Update the local package by:
-      * Updating the 'Version' and 'Release' fields in the .spec file as needed, following packaging documentation.
+      * Updating the 'Version' and 'Release' fields in the .spec file as needed (or corresponding macros), following packaging documentation.
       * Updating macros related to update (e.g., 'commit') if present and necessary; examine the file's history to see how updates are typically done.
       * Creating a changelog entry, referencing the Jira issue as "Resolves: <jira_issue>" for each issue in {{ jira_issues }}.
       * Downloading sources using `spectool -g -S {{ package }}.spec` (you might need to copy local sources, e.g. if the .spec file loads some macros from them, to a directory where spectool expects them).
       * Uploading the new sources using `centpkg --release {{ dist_git_branch }} new-sources`.
       * Only performing changes relevant to the version update: Do not rename variables, comment out existing lines, or alter if-else branches in the .spec file.
-      
+
   5. Verify and adjust the changes:
     * Use `rpmlint` to validate your .spec file changes and fix any new errors it identifies.
-    * Try to successfully build and test local .spec file and source changes. Follow these steps, fixing any errors along the way:
-      * Generate the SRPM using `rpmbuild -bs` (ensure your .spec file and source files are correctly copied to the build environment as required by the command).
-      * Perform a local build using the generated SRPM using `mock` command (or `rpmbuild`, if you are missing privileges for `mock`).
-      * Resolve build failures: If the build fails, analyze the errors and adjust your packaging. Common fixes include updating BuildRequires in .spec file or regenerating patches to align with upstream source changes.
-      * If you are not able to easily resolve the errors after few attemps, document the build errors for the next step (unless they are related to the environment the build is running in).
-  
+    * Generate the SRPM using `rpmbuild -bs` (ensure your .spec file and source files are correctly copied to the build environment as required by the command).
+
   6. Commit the changes:
     * The title of the Git commit should be in the format "[DO NOT MERGE: AI EXPERIMENTS] Update to version {{ version }}"
     * Include the reference to Jira as "Resolves: <jira_issue>" for each issue in {{ jira_issues }}.
@@ -104,5 +96,3 @@ prompt: |
 #    * Open a merge request against the repository of the {{ package }} using the glab tool with previously created commit.
 #  8. Comment on each Jira issue from {{ jira_issues }} in https://issues.redhat.com using Jira API this content:
 #     Automated MR for the update created in <url-of-the-created-gitlab-mr>.
-
-
