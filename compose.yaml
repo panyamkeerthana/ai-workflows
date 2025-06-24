@@ -13,14 +13,14 @@ services:
       - mcp-atlassian
     image: goose-container
     build:
-      context: .
-      dockerfile: files/Containerfile
+      context: ./goose-container
+      dockerfile: Containerfile
     env_file:
       - .env
     volumes:
       - home-goose-persistent:/home/goose
-      - ./recipes:/home/goose/recipes:ro,z
-      - ./files/goose-config.yaml:/home/goose/.config/goose/config.yaml
+      - ./goose-recipes:/home/goose/recipes:ro,z
+      - ./goose-container/goose-config.yaml:/home/goose/.config/goose/config.yaml:ro,z
     stdin_open: true
     tty: true
     restart: "no"
@@ -31,3 +31,4 @@ services:
 
 volumes:
   home-goose-persistent:
+
