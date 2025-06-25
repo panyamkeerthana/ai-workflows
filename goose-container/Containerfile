@@ -4,7 +4,7 @@ RUN dnf install -y libxcb python3 gh
 
 RUN curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh | GOOSE_BIN_DIR=/usr/local/bin CONFIGURE=false bash
 
-RUN useradd -m -G wheel goose
+RUN useradd -m -G wheel goose && echo '%wheel ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/wheel-nopasswd
 
 RUN mkdir -p /home/goose/.config/goose /home/goose/recipes
 COPY ./goose-config.yaml /home/goose/.config/goose/config.yaml
