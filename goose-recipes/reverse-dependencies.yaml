@@ -7,6 +7,7 @@ instructions: |
     * Work only in a temporary directory that you can create with the mktemp tool.
     * Run `dnf repoquery --whatdepends` to determine the direct reverse dependencies of a package.
     * Download the RPM .repo files with curl and make sure to ignore certificates.
+    * Before executing any command, print the plan and the steps you want to take.
 
 parameters:
 - key: package
@@ -17,6 +18,13 @@ parameters:
 prompt: |
   You are an AI agent to list all direct and transitive reverse dependencies of a given RPM package.  As input you will receive the name of the package.  A reverse dependency package is one that depends on the input package.  As output you must print one list for the direct reverse dependencies, and another list for the transitive reverse dependencies.  Follow the below steps in the given order:
 
-  1. First pull the RPM .repo file from the following source: https://download.devel.redhat.com/rhel-10/nightly/RHEL-10/latest-RHEL-10/repofile.repo
+  1. First, remove all other .repo files in /etc/yum.repos.d/.  That will implicitly disable all of them.
 
-  2. TODO...
+  2. Then download the RPM .repo file from the following source: https://download.devel.redhat.com/rhel-10/nightly/RHEL-10/latest-RHEL-10/repofile.repo
+    * Use curl and the -k flag to ignore certificates.
+    * If you face errors during the download, print them and exit.
+    * Do attempt to download any other file.
+    * Copy the fhe file to the /etc/yum/repos.d directory.
+
+  # TODO: experiment with this first and then tackle transitive dependencies later
+  2. Find the direct reverse dependencies of {{ package }} and print them in a pretty list.
