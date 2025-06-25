@@ -25,7 +25,7 @@ prompt: |
   # TODO: should we make sure the version of the package exists upstream?
   3. Identify the `<package_version>` the `<package_name>` should be updated or rebased to.
 
-  4. Identify the target branch `<git_branch>` of the `<package_name>` on GitLab to update. The branch information is usually the fixVersion Jira field.  Verify the branch exists on GitLab.
+  4. Identify the target branch `<git_branch>` of the `<package_name>` on GitLab to update. The branch information is usually related with the fixVersion Jira field.  Verify the branch exists on GitLab.
     * A fixVersion named rhel-N maps to a branch named cNs.
 
   Print the detected `<package_name>`, `<package_version>` and `<git_branch>` in a pretty list.
