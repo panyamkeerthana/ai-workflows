@@ -24,7 +24,7 @@ prompt: |
     * Use curl and the -k flag to ignore certificates.
     * If you face errors during the download, print them and exit.
     * Do attempt to download any other file.
-    * Copy the fhe file to the /etc/yum/repos.d directory.
+    * Copy the file to the /etc/yum/repos.d directory.
 
   # TODO: experiment with this first and then tackle transitive dependencies later
   2. Find the direct reverse dependencies of {{ package }} and print them in a pretty list.
