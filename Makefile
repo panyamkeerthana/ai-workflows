@@ -49,10 +49,18 @@ JIRA_ISSUES ?= "RHEL-123"
 rebase-package:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
-		-c "/usr/local/bin/goose run --recipe recipes/rebase-package.yaml \
+		-c "set -e; \
+			set +x; \
+			askpass=\"\$$(mktemp)\"; \
+			echo '#!/bin/sh' > \"\$$askpass\"; \
+			echo 'echo \$$GITLAB_TOKEN' >> \"\$$askpass\"; \
+			chmod +x \"\$$askpass\"; \
+			export GIT_ASKPASS=\"\$$askpass\"; \
+			/home/goose/wait_mcp_server.sh && /usr/local/bin/goose run --recipe recipes/rebase-package.yaml \
 			--params package=$(PACKAGE) \
 			--params version=$(VERSION) \
-			--params jira_issues=$(JIRA_ISSUES)"
+			--params jira_issues=$(JIRA_ISSUES) \
+			--params gitlab_user=$(GITLAB_USER) && echo 'Recipe completed. Dropping into shell...' && /bin/bash"
 
 PACKAGE ?= podman
 .PHONY: reverse-dependencies
