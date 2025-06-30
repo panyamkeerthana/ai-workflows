@@ -1,24 +1,27 @@
 # ADK CentOS Package Updater Agent
 
-This Google ADK agent automates the process of updating CentOS packages to newer versions and preparing them for merge requests.
+This Google ADK agent automates CentOS package updates and prepares merge requests.
 
-## Quick Start (Container)
+## Quick Start
 
-1. **Build the container:**
+1. **Build container:**
    ```bash
-   cd adk-workflows
    make build
    ```
 
 2. **Configure environment:**
    ```bash
    cp env.template .env
-   # Edit .env with your values (GOOGLE_API_KEY, PACKAGE, VERSION, etc.)
+   # Edit .env with your API keys and package details
    ```
 
-3. **Run the agent:**
+3. **Run specific workflows:**
    ```bash
-   make adk-package-updater
-   ```
+   # Full pipeline
+   make rebase-pipeline JIRA_ISSUE="RHEL-123"
 
-After this I needed to input prompt `run agent`, need to check how to avoid this.
+   # Individual components
+   make issue-details JIRA_ISSUE="RHEL-123"
+   make rebase-package PACKAGE=httpd VERSION=2.4.58
+
+   ```
