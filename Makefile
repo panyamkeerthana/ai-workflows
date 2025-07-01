@@ -8,6 +8,9 @@
 .PHONY: # Manage MCP server for JIRA
 .PHONY: stop-mcp-atlassian run-mcp-atlassian logs-mcp-atlassian
 .PHONY:
+.PHONY: # Manage MCP server for Testing Farm
+.PHONY: run-mcp-testing-farm stop-mcp-testing-farm logs-mcp-testing-farm
+.PHONY:
 .PHONY: # Start Goose container without a specific recipe
 .PHONY: run-goose run-goose-bash
 .PHONY:
@@ -46,6 +49,15 @@ stop-mcp-atlassian:
 
 logs-mcp-atlassian:
 	$(COMPOSE) logs -f mcp-atlassian
+
+run-mcp-testing-farm:
+	$(COMPOSE) up -d mcp-testing-farm
+
+stop-mcp-testing-farm:
+	$(COMPOSE) down mcp-testing-farm
+
+logs-mcp-testing-farm:
+	$(COMPOSE) logs -f mcp-testing-farm
 
 run-goose:
 	- $(COMPOSE) up -d goose
@@ -111,9 +123,12 @@ help:
 	@echo "Available targets:"
 	@echo "  config                      - Copy config templates to .secrets/ and .env"
 	@echo "  build                       - Build all images"
-	@echo "  run-mcp-atlassian           - Start MCP server in background"
-	@echo "  stop-mcp-atlassian          - Stop MCP server"
-	@echo "  logs-mcp-atlassian          - Show MCP server logs"
+	@echo "  run-mcp-atlassian           - Start Atlassian MCP server in background"
+	@echo "  stop-mcp-atlassian          - Stop Atlassian MCP server"
+	@echo "  logs-mcp-atlassian          - Show Atlassian MCP server logs"
+	@echo "  run-mcp-testing-farm        - Start testing-farm MCP server in background"
+	@echo "  stop-mcp-testing-farm       - Stop testing-farm MCP server"
+	@echo "  logs-mcp-testing-farm       - Show testing-farm MCP server logs"
 	@echo "  run-goose                   - Run goose interactively"
 	@echo "  run-goose-bash              - Run goose with bash shell"
 	@echo "  <recipe>                    - To run the recipes/<recipe>.yaml"

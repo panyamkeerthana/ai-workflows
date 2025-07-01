@@ -15,9 +15,26 @@ services:
       timeout: 2s
       retries: 30
 
+  mcp-testing-farm:
+    image: ghcr.io/thrix/testing-farm-mcp:latest
+    ports:
+      - published: "${MCP_TESTING_FARM_PORT}"
+        target: "${MCP_TESTING_FARM_PORT}"
+    env_file:
+      - .secrets/mcp-testing-farm.env
+    entrypoint: [ "fastmcp" ]
+    command: ["run", "/app/testing_farm_mcp/server.py:mcp", "--transport", "sse", "--port", "${MCP_TESTING_FARM_PORT}", "--host", "0.0.0.0", "--log-level", "DEBUG"]
+    restart: unless-stopped
+    healthcheck:
+      test: wget --spider -q "http://127.0.0.1:${MCP_TESTING_FARM_PORT}/sse"
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
   goose:
     depends_on:
       mcp-atlassian: { condition: service_healthy }
+      mcp-testing-farm: { condition: service_healthy }
     image: goose-container
     build:
       context: ./goose-container
