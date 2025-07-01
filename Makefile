@@ -30,7 +30,7 @@ COMPONENT ?= cockpit
 check-jira-tickets:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
-		-c "/home/goose/wait_mcp_server.sh && /usr/local/bin/goose run --recipe recipes/check-jira-tickets.yaml \
+		-c "/usr/local/bin/goose run --recipe recipes/check-jira-tickets.yaml \
 			--params project=$(PROJECT) \
 			--params component=$(COMPONENT)"
 
@@ -39,7 +39,7 @@ ISSUE ?= RHEL-78418
 issue-details:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
-		-c "/home/goose/wait_mcp_server.sh && /usr/local/bin/goose run --recipe recipes/issue-details.yaml \
+		-c "/usr/local/bin/goose run --recipe recipes/issue-details.yaml \
 			--params issue=$(ISSUE)"
 
 .PHONY: triage-issue
@@ -63,7 +63,7 @@ rebase-package:
 			echo 'echo \$$GITLAB_TOKEN' >> \"\$$askpass\"; \
 			chmod +x \"\$$askpass\"; \
 			export GIT_ASKPASS=\"\$$askpass\"; \
-			/home/goose/wait_mcp_server.sh && /usr/local/bin/goose run --recipe recipes/rebase-package.yaml \
+			/usr/local/bin/goose run --recipe recipes/rebase-package.yaml \
 			--params package=$(PACKAGE) \
 			--params version=$(VERSION) \
 			--params jira_issues=$(JIRA_ISSUES) \

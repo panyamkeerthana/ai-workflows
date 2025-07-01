@@ -9,10 +9,15 @@ services:
       - .secrets/mcp-atlassian.env
     command: ["--transport", "sse", "--port", "${MCP_ATLASSIAN_PORT}", "-vv"]
     restart: unless-stopped
+    healthcheck:
+      test: wget --spider -q "http://127.0.0.1:${MCP_ATLASSIAN_PORT}/healthz"
+      interval: 2s
+      timeout: 2s
+      retries: 30
 
   goose:
     depends_on:
-      - mcp-atlassian
+      mcp-atlassian: { condition: service_healthy }
     image: goose-container
     build:
       context: ./goose-container
@@ -23,7 +28,6 @@ services:
       - home-goose-persistent:/home/goose
       - ./goose-recipes:/home/goose/recipes:ro,z
       - ./goose-container/goose-config.yaml:/home/goose/.config/goose/config.yaml:ro,z
-      - ./goose-container/wait_mcp_server.sh:/home/goose/wait_mcp_server.sh:ro,z
     stdin_open: true
     tty: true
     restart: "no"
