@@ -1,8 +1,8 @@
 from google.adk.agents import Agent
 from google.adk.tools import agent_tool, google_search
-from google.adk.code_executors import BuiltInCodeExecutor
 from typing import Dict, Any
 import os
+from shell_utils import shell_command
 
 def get_model() -> str:
     """Get model from environment with consistent default."""
@@ -29,15 +29,16 @@ def create_package_updater_prompt(config: Dict[str, Any]) -> str:
 You are a CentOS package version checker and updater agent. You first check if a package needs updating, then perform the actual package update if required.
 
 **IMPORTANT GUIDELINES**
-- **Tool Usage**: You have CodeAgent (shell commands) and SearchAgent (web search) - USE THEM!
-- **No Placeholders**: Execute actual commands and provide real results
+- **Tool Usage**: You have shell_command (direct tool for executing shell commands) and SearchAgent (for web search) - use them as needed!
+- **No Placeholders**: Use shell_command tool for every suggested command - execute actual commands and provide real results
 - **Context Tracking**: Remember directories, files, and commands from previous steps
-- **Error Handling**: Show actual error messages, don't give up on first failure
-- **CRITICAL: Working Directory Management**:
-  - CodeAgent does NOT maintain working directory between calls
-  - ALWAYS use `cd /path && command` format to ensure you're in the right directory
-  - Example: `cd /tmp/package-update-work/[PACKAGE_NAME] && pwd && ls -la`
-  - NEVER assume you're still in a directory from a previous CodeAgent call
+- **Command Execution Rules**:
+   - Use shell_command tool for ALL command execution
+   - If a command shows "no output" or empty STDOUT, that is a VALID result - do not retry
+   - Commands that succeed with no output (like 'mkdir', 'cd', 'git add') are normal - report success
+- **Error Handling**:
+   - Show actual error messages, don't give up on first failure
+   - Check that the changes you have done make sense and correct yourself
 - **Configuration**:
   - Package repository: {config['git_url']}/[package_name]
   - Git branch: {config['dist_git_branch']}
@@ -52,23 +53,34 @@ You are a CentOS package version checker and updater agent. You first check if a
 - If missing any values, clearly state what's needed and stop
 
 **Step 2: Check Current Version**
-- Use CodeAgent to curl the .spec file from the repository.
-- Look for "Version:" field in the .spec file
+- Use curl the .spec file from the repository and look for "Version:" field in the .spec file
 - Compare current version with target VERSION
 - **Decision**: Output "VERSION_CHECK_DECISION: NO_UPDATE_NEEDED" if versions match, "UPDATE_REQUIRED" if update needed, "ERROR" if issues
 
 **Step 3: Package Update** (Only if UPDATE_REQUIRED)
-- Use CodeAgent to create working directory: `mkdir -p /tmp/package-update-work && cd /tmp/package-update-work && pwd`
-- Clone repository: `cd /tmp/package-update-work && git clone {config['git_url']}/[PACKAGE_NAME].git && cd [PACKAGE_NAME] && pwd && ls -la`
-- Create update branch: `cd /tmp/package-update-work/[PACKAGE_NAME] && git checkout -b automated-packaging-update-[VERSION]`
-- Update .spec file Version and Release fields: `cd /tmp/package-update-work/[PACKAGE_NAME] && ls *.spec`
-- Create changelog entry with "Resolves: {config['jira_issue']}"
-- Download sources: `cd /tmp/package-update-work/[PACKAGE_NAME] && spectool -g -S [package].spec`
+- Create working directory: ```mkdir -p /tmp/package-update-work && cd /tmp/package-update-work```
+- Clone repository: ```cd /tmp/package-update-work && git clone {config['git_url']}/[PACKAGE_NAME].git && cd [PACKAGE_NAME] && ls -la```
+- Create update branch: ```cd /tmp/package-update-work/[PACKAGE_NAME] && git checkout -b automated-packaging-update-[VERSION]```
+- Update the local package by:
+   - Updating the 'Version' and 'Release' fields in the .spec file as needed (or corresponding macros), following packaging documentation.
+   - Make sure the format of the .spec file remains the same.
+   - Updating macros related to update (e.g., 'commit') if present and necessary; examine the file's history to see how updates are typically done.
+      - You might need to check some information in upstream repository, e.g. the commit SHA of the new version.
+   - Create changelog entry that will also include "Resolves: {config['jira_issue']}" for each Jira issue, follow the format of the existing changelog entries,
+     use {config['git_user']} and {config['git_email']} for the updated changelog entry.
+   - Download the remote sources using `spectool -g -S [PACKAGE_NAME].spec` command.
+   - IMPORTANT: Only performing changes relevant to the version update: Do not rename variables, comment out existing lines, or alter if-else branches in the .spec file.
 
 **Step 4: Validation** (Only if Step 3 completed)
-- Run rpmlint: `cd /tmp/package-update-work/[PACKAGE_NAME] && rpmlint [package].spec`
-- Generate SRPM: `cd /tmp/package-update-work/[PACKAGE_NAME] && rpmbuild -bs [package].spec`
-- Fix any errors found using the same `cd /tmp/package-update-work/[PACKAGE_NAME] && [command]` pattern
+- Run rpmlint command on the updated .spec file.
+- Try to generate an SRPM using the updated .spec file, using `rpmbuild -bs` command (might require defining the source and spec directories).
+- Fix any errors.
+
+** Step 6: Commit the changes**
+- Use the {config['git_user']} and {config['git_email']} for the commit.
+- The title of the Git commit should be in the format "[DO NOT MERGE: AI EXPERIMENTS] Update to version <version>"
+- Include the reference to Jira as "Resolves: <jira_issue>" for each issue in.
+- Commit just the specfile change.
 
 **Step 5: Output Results**
 - Provide structured summary with VERSION_CHECK_DECISION, UPDATE_STATUS, STEPS_COMPLETED, COMMANDS_EXECUTED, VALIDATION_RESULTS
@@ -79,13 +91,8 @@ def create_package_updater_agent():
     config = get_config()
     model = config['model']
 
-    # Code execution specialist agent - uses built-in code executor for shell commands
-    coding_agent = Agent(
-        model=model,
-        name='CodeAgent',
-        instruction='You are a specialist in code execution. Execute shell commands for git operations, package building, and file manipulation.',
-        code_executor=BuiltInCodeExecutor(),
-    )
+        # Import the GenerateContentConfig for temperature settings
+    from google.genai.types import GenerateContentConfig
 
     # Search specialist agent - uses Google search for finding package information
     search_agent = Agent(
@@ -93,14 +100,16 @@ def create_package_updater_agent():
         name='SearchAgent',
         instruction='You are a specialist in web search. Search for package information, upstream versions, source URLs, documentation and everything else you need.',
         tools=[google_search],
+        generate_content_config=GenerateContentConfig(temperature=0.2),
     )
 
-    # Root agent that coordinates both specialists
+    # Root agent that uses shell_command directly and SearchAgent as wrapped tool
     return Agent(
         name="version_checker_updater",
         model=model,
         description="Checks package versions and performs updates if needed",
         instruction=create_package_updater_prompt(config),
-        tools=[agent_tool.AgentTool(agent=coding_agent), agent_tool.AgentTool(agent=search_agent)],
+        tools=[shell_command, agent_tool.AgentTool(agent=search_agent)],
         output_key="version_check_and_update_result",
+        generate_content_config=GenerateContentConfig(temperature=0.2),
     )

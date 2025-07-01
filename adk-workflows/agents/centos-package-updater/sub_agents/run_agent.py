@@ -42,23 +42,14 @@ async def run_centos_agent():
     agent_type = os.environ.get('AGENT_TYPE', 'issue_analyzer')
     logger.info(f"Starting agent: {agent_type}")
 
-    # Create the selected agent using factory functions
+    # Create the selected agent using factory functions (will be recreated with MCP tools if needed)
     if agent_type == 'issue_analyzer':
-        agent = create_issue_analyzer_agent()
+        agent = None  # Will be created with MCP tools
     elif agent_type == 'package_updater':
         agent = create_package_updater_agent()
     elif agent_type == 'pipeline':
-        logger.info("Creating SequentialAgent pipeline")
-
-        # Create fresh agent instances (MCP will be added at runtime)
-        issue_analyzer = create_issue_analyzer_agent()
-        package_updater = create_package_updater_agent()
-
-        agent = SequentialAgent(
-            name="centos_package_pipeline_update_workflow",
-            description="A sequential workflow for CentOS package updating: issue analysis → version check and package update",
-            sub_agents=[issue_analyzer, package_updater]
-        )
+        agent = None  # Will be created with MCP tools
+        logger.info("Will create SequentialAgent pipeline with MCP tools")
     else:
         logger.error(f"Unknown AGENT_TYPE '{agent_type}'. Must be 'issue_analyzer', 'package_updater', or 'pipeline'")
         sys.exit(1)
@@ -69,8 +60,6 @@ async def run_centos_agent():
 
 async def run_single_agent(logger, agent, agent_type):
     """Run a single agent with proper MCP lifecycle management."""
-    logger.info(f"Loaded agent: {agent.name}")
-
     session_service = InMemorySessionService()
     APP_NAME = "centos_package_updater"
     USER_ID = f"user_1_{agent_type}"
@@ -81,30 +70,36 @@ async def run_single_agent(logger, agent, agent_type):
     )
     logger.info(f"Created session: {SESSION_ID}")
 
-    # For issue_analyzer, add MCP tools with proper lifecycle management
+    # For agents that need MCP tools, use proper lifecycle management
     if agent_type == 'issue_analyzer' or agent_type == 'pipeline':
         # Use MCP connection with proper async context management
         async with mcp_connection() as mcp_tools:
             logger.info("MCP connection established")
 
-            # Create JIRA specialist agent with MCP tools
-            jira_agent = Agent(
-                model=get_model(),
-                name='JiraAgent',
-                instruction='You are a specialist in JIRA operations. Use JIRA tools to fetch and analyze issues.',
-                tools=mcp_tools,
-            )
+            # Recreate agents with MCP tools built-in
+            if agent_type == 'issue_analyzer':
+                agent = create_issue_analyzer_agent(mcp_tools=mcp_tools)
+                logger.info(f"Created issue_analyzer agent: {agent.name}")
+            elif agent_type == 'pipeline':
+                # Create fresh agent instances with MCP tools for issue_analyzer
+                issue_analyzer = create_issue_analyzer_agent(mcp_tools=mcp_tools)
+                package_updater = create_package_updater_agent()
 
-            # Add JIRA agent to the main agent's tools temporarily
-            agent.tools.append(agent_tool.AgentTool(agent=jira_agent))
+                agent = SequentialAgent(
+                    name="centos_package_pipeline_update_workflow",
+                    description="A sequential workflow for CentOS package updating: issue analysis → version check and package update",
+                    sub_agents=[issue_analyzer, package_updater]
+                )
+                logger.info(f"Created pipeline agent: {agent.name} with {len(agent.sub_agents)} sub-agents")
 
-            # Now run the agent with MCP tools available
+            # Now run the agent with MCP tools properly integrated
             await _run_agent_with_session(logger, agent, session_service, session,
                                         APP_NAME, USER_ID, SESSION_ID, agent_type)
 
         logger.info("MCP connection properly closed")
     else:
         # Package updater doesn't need MCP
+        logger.info(f"Using package_updater agent: {agent.name}")
         await _run_agent_with_session(logger, agent, session_service, session,
                                     APP_NAME, USER_ID, SESSION_ID, agent_type)
 
