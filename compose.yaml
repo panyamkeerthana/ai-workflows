@@ -1,11 +1,13 @@
+version: "2.4"
 services:
   mcp-atlassian:
     image: ghcr.io/sooperset/mcp-atlassian:latest
     ports:
-      - "9000:9000"
+      - published: "${MCP_ATLASSIAN_PORT}"
+        target: "${MCP_ATLASSIAN_PORT}"
     env_file:
       - .secrets/mcp-atlassian.env
-    command: ["--transport", "sse", "--port", "9000", "-vv"]
+    command: ["--transport", "sse", "--port", "${MCP_ATLASSIAN_PORT}", "-vv"]
     restart: unless-stopped
 
   goose:
