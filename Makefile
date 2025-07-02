@@ -19,6 +19,7 @@
 .PHONY: issue-details
 .PHONY: rebase-package
 .PHONY: reverse-dependencies
+.PHONY: test-package
 .PHONY: triage-issue
 
 ## Defaults
@@ -34,6 +35,11 @@ rebase-package: VERSION ?= 339
 rebase-package: JIRA_ISSUES ?= "RHEL-123"
 
 reverse-dependencies: PACKAGE ?= podman
+
+test-package: PACKAGE ?= podman
+test-package: DIST_GIT_BRANCH ?= c10s
+test-package: GIT_URL ?= https://gitlab.com/redhat/centos-stream/rpms
+test-package: RPM_COMPOSE ?= CentOS-Stream-10
 
 triage-issue: ISSUE ?= RHEL-78418
 
@@ -108,6 +114,15 @@ reverse-dependencies:
 		-c "/usr/local/bin/goose run --recipe recipes/reverse-dependencies.yaml \
 			--params package=$(PACKAGE)"
 
+test-package:
+	$(COMPOSE) run --rm \
+		--entrypoint /bin/sh goose \
+		-c "/usr/local/bin/goose run --recipe recipes/test-package.yaml \
+			--params git_url=$(GIT_URL) \
+			--params package=$(PACKAGE) \
+			--params dist_git_branch=$(DIST_GIT_BRANCH) \
+			--params compose=$(RPM_COMPOSE)"
+
 config: GLOBAL_TEMPLATE = templates/compose.env
 config: SECRET_TEMPLATES = $(filter-out $(GLOBAL_TEMPLATE), $(wildcard templates/*))
 config:
@@ -131,5 +146,6 @@ help:
 	@echo "  logs-mcp-testing-farm       - Show testing-farm MCP server logs"
 	@echo "  run-goose                   - Run goose interactively"
 	@echo "  run-goose-bash              - Run goose with bash shell"
+	@echo "  test-package                - Submit package testing request to testing farm"
 	@echo "  <recipe>                    - To run the recipes/<recipe>.yaml"
 	@echo "  clean                       - Stop all services and clean volumes"
