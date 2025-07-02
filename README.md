@@ -23,7 +23,7 @@ Run the Jira MCP server from Atlassian and Goose separately, otherwise not all t
 is always redirected to the Goose container.
 
 1. `make run-mcp-atlassian`
-2. `make run-goose`
+2. `make run-goose` (Requires enabling the [Generative Language API](https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/) or another LLM provider and configuring the environment variables as described in the [configuration docs](https://block.github.io/goose/docs/guides/config-file#global-settings).)
 3. Type *List all In Progress issues at https://issues.redhat.com/projects/LD* and wait for the output.
 4. `make clean`
 
