@@ -4,7 +4,7 @@ services:
     ports:
       - "9000:9000"
     env_file:
-      - .env
+      - .secrets/mcp-atlassian.env
     command: ["--transport", "sse", "--port", "9000", "-vv"]
     restart: unless-stopped
 
@@ -16,7 +16,7 @@ services:
       context: ./goose-container
       dockerfile: Containerfile
     env_file:
-      - .env
+      - .secrets/goose.env
     volumes:
       - home-goose-persistent:/home/goose
       - ./goose-recipes:/home/goose/recipes:ro,z

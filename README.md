@@ -5,11 +5,12 @@ In this workflows we are using [MCP server for Atlassian tools](https://github.c
 
 ## Configure
 
-1. Copy `env.template` to `.env` and update it as follows
-2. Set your Gemini key in `GOOGLE_API_KEY` (take it from Google Cloud -> API & Services -> Credentials -> API Keys -> show key)
-3. Set your Jira Personal Token in `JIRA_PERSONAL_TOKEN` (create PATs in your Jira/Confluence profile settings - usually under "Personal Access Tokens")
-4. Change (if needed) the `JIRA_URL` now pointing at `https://issues.redhat.com/`
-5. Set your Gitlab Personal Token `GITLAB_TOKEN` with read permissions (read_user, read_repository, read_api).  Note that some recipes require write access to Gitlab: use it at your own risk.
+Secrets such as tokens are managed in the form of environment files.  The templates for those files can be found in the `./templates` directory.  To configure the deployment, run `make secrets` first to copy the files to the `.secrets` directory where you can manually edit the files to add your tokens and more.
+
+
+ `GOOGLE_API_KEY`: take it from Google Cloud -> API & Services -> Credentials -> API Keys -> show key)
+`JIRA_PERSONAL_TOKEN`: create PATs in your Jira/Confluence profile settings - usually under "Personal Access Tokens"
+`GITLAB_TOKEN` with read permissions (read_user, read_repository, read_api).  Note that some recipes require write access to Gitlab: use it at your own risk.
 
 If you need to change the llm provider and model, they are stored in the Goose config file: `goose-container/goose-config.yaml` (`GOOSE_PROVIDER`, `GOOSE_MODEL`)
 
