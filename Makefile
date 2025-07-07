@@ -1,32 +1,58 @@
+## Public make targets
+.PHONY: # Help output
+.PHONY: help
+.PHONY:
+.PHONY: # Manage container image
+.PHONY: clean build config
+.PHONY:
+.PHONY: # Manage MCP server for JIRA
+.PHONY: stop-mcp-atlassian run-mcp-atlassian logs-mcp-atlassian
+.PHONY:
+.PHONY: # Start Goose container without a specific recipe
+.PHONY: run-goose run-goose-bash
+.PHONY:
+.PHONY: # Run Goose with specific recipes
+.PHONY: check-jira-tickets
+.PHONY: issue-details
+.PHONY: rebase-package
+.PHONY: reverse-dependencies
+.PHONY: triage-issue
+
+## Defaults
 COMPOSE ?= podman compose
 
-.PHONY: build
+check-jira-tickets: PROJECT ?= RHEL
+check-jira-tickets: COMPONENT ?= cockpit
+
+issue-details: ISSUE ?= RHEL-78418
+
+rebase-package: PACKAGE ?= cockpit
+rebase-package: VERSION ?= 339
+rebase-package: JIRA_ISSUES ?= "RHEL-123"
+
+reverse-dependencies: PACKAGE ?= podman
+
+triage-issue: ISSUE ?= RHEL-78418
+
+## Operations
 build:
 	$(COMPOSE) build
 
-.PHONY: run-mcp-atlassian
 run-mcp-atlassian:
 	$(COMPOSE) up -d mcp-atlassian
 
-.PHONY: stop-mcp-atlassian
 stop-mcp-atlassian:
 	$(COMPOSE) down mcp-atlassian
 
-.PHONY: logs-mcp-atlassian
 logs-mcp-atlassian:
 	$(COMPOSE) logs -f mcp-atlassian
 
-.PHONY: run-goose
 run-goose:
 	$(COMPOSE) run --rm goose
 
-.PHONY: run-goose-bash
 run-goose-bash:
 	$(COMPOSE) run --rm --entrypoint /usr/bin/bash goose
 
-PROJECT ?= RHEL
-COMPONENT ?= cockpit
-.PHONY: check-jira-tickets
 check-jira-tickets:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
@@ -34,25 +60,18 @@ check-jira-tickets:
 			--params project=$(PROJECT) \
 			--params component=$(COMPONENT)"
 
-ISSUE ?= RHEL-78418
-.PHONY: issue-details
 issue-details:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
 		-c "/usr/local/bin/goose run --recipe recipes/issue-details.yaml \
 			--params issue=$(ISSUE)"
 
-.PHONY: triage-issue
 triage-issue:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
 		-c "/home/goose/wait_mcp_server.sh && /usr/local/bin/goose run --recipe recipes/triage-issue.yaml \
 			--params issue=$(ISSUE)"
 
-PACKAGE ?= cockpit
-VERSION ?= 339
-JIRA_ISSUES ?= "RHEL-123"
-.PHONY: rebase-package
 rebase-package:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
@@ -69,23 +88,19 @@ rebase-package:
 			--params jira_issues=$(JIRA_ISSUES) \
 			--params gitlab_user=$(GITLAB_USER) && echo 'Recipe completed. Dropping into shell...' && /bin/bash"
 
-PACKAGE ?= podman
-.PHONY: reverse-dependencies
 reverse-dependencies:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
 		-c "/usr/local/bin/goose run --recipe recipes/reverse-dependencies.yaml \
 			--params package=$(PACKAGE)"
 
-GLOBAL_TEMPLATE = templates/compose.env
-SECRET_TEMPLATES = $(filter-out $(GLOBAL_TEMPLATE), $(wildcard templates/*))
-.PHONY: config
+config: GLOBAL_TEMPLATE = templates/compose.env
+config: SECRET_TEMPLATES = $(filter-out $(GLOBAL_TEMPLATE), $(wildcard templates/*))
 config:
 	mkdir -p .secrets
 	cp -n $(SECRET_TEMPLATES) .secrets/
 	cp -n $(GLOBAL_TEMPLATE) .env
 
-.PHONY: clean
 clean:
 	$(COMPOSE) down
 	podman volume prune -f
