@@ -48,10 +48,12 @@ logs-mcp-atlassian:
 	$(COMPOSE) logs -f mcp-atlassian
 
 run-goose:
-	$(COMPOSE) run --rm goose
+	- $(COMPOSE) up -d goose
+	$(COMPOSE) exec goose goose
 
 run-goose-bash:
-	$(COMPOSE) run --rm --entrypoint /usr/bin/bash goose
+	- $(COMPOSE) up -d goose
+	$(COMPOSE) exec goose bash
 
 check-jira-tickets:
 	$(COMPOSE) run --rm \
