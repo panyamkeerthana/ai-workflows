@@ -69,6 +69,10 @@ reverse-dependencies:
 		--entrypoint /bin/sh goose \
 		-c "/usr/local/bin/goose run --recipe recipes/reverse-dependencies.yaml \
 			--params package=$(PACKAGE)"
+.PHONY: secrets
+secrets:
+	mkdir -p .secrets
+	cp -n templates/* .secrets
 
 .PHONY: clean
 clean:
