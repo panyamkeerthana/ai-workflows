@@ -42,6 +42,13 @@ issue-details:
 		-c "/home/goose/wait_mcp_server.sh && /usr/local/bin/goose run --recipe recipes/issue-details.yaml \
 			--params issue=$(ISSUE)"
 
+.PHONY: triage-issue
+triage-issue:
+	$(COMPOSE) run --rm \
+		--entrypoint /bin/sh goose \
+		-c "/home/goose/wait_mcp_server.sh && /usr/local/bin/goose run --recipe recipes/triage-issue.yaml \
+			--params issue=$(ISSUE)"
+
 PACKAGE ?= cockpit
 VERSION ?= 339
 JIRA_ISSUES ?= "RHEL-123"
