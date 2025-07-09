@@ -1,58 +1,97 @@
+## Public make targets
+.PHONY: # Help output
+.PHONY: help
+.PHONY:
+.PHONY: # Manage container image
+.PHONY: clean build config
+.PHONY:
+.PHONY: # Manage MCP server for JIRA
+.PHONY: stop-mcp-atlassian run-mcp-atlassian logs-mcp-atlassian
+.PHONY:
+.PHONY: # Manage MCP server for Testing Farm
+.PHONY: run-mcp-testing-farm stop-mcp-testing-farm logs-mcp-testing-farm
+.PHONY:
+.PHONY: # Start Goose container without a specific recipe
+.PHONY: run-goose run-goose-bash
+.PHONY:
+.PHONY: # Run Goose with specific recipes
+.PHONY: check-jira-tickets
+.PHONY: issue-details
+.PHONY: rebase-package
+.PHONY: reverse-dependencies
+.PHONY: test-package
+.PHONY: triage-issue
+
+## Defaults
 COMPOSE ?= podman compose
 
-.PHONY: build
+check-jira-tickets: PROJECT ?= RHEL
+check-jira-tickets: COMPONENT ?= cockpit
+
+issue-details: ISSUE ?= RHEL-78418
+
+rebase-package: PACKAGE ?= cockpit
+rebase-package: VERSION ?= 339
+rebase-package: JIRA_ISSUES ?= "RHEL-123"
+
+reverse-dependencies: PACKAGE ?= podman
+
+test-package: PACKAGE ?= podman
+test-package: DIST_GIT_BRANCH ?= c10s
+test-package: GIT_URL ?= https://gitlab.com/redhat/centos-stream/rpms
+test-package: RPM_COMPOSE ?= CentOS-Stream-10
+
+triage-issue: ISSUE ?= RHEL-78418
+
+## Operations
 build:
 	$(COMPOSE) build
 
-.PHONY: run-mcp-atlassian
 run-mcp-atlassian:
 	$(COMPOSE) up -d mcp-atlassian
 
-.PHONY: stop-mcp-atlassian
 stop-mcp-atlassian:
 	$(COMPOSE) down mcp-atlassian
 
-.PHONY: logs-mcp-atlassian
 logs-mcp-atlassian:
 	$(COMPOSE) logs -f mcp-atlassian
 
-.PHONY: run-goose
+run-mcp-testing-farm:
+	$(COMPOSE) up -d mcp-testing-farm
+
+stop-mcp-testing-farm:
+	$(COMPOSE) down mcp-testing-farm
+
+logs-mcp-testing-farm:
+	$(COMPOSE) logs -f mcp-testing-farm
+
 run-goose:
-	$(COMPOSE) run --rm goose
+	- $(COMPOSE) up -d goose
+	$(COMPOSE) exec goose goose
 
-.PHONY: run-goose-bash
 run-goose-bash:
-	$(COMPOSE) run --rm --entrypoint /usr/bin/bash goose
+	- $(COMPOSE) up -d goose
+	$(COMPOSE) exec goose bash
 
-PROJECT ?= RHEL
-COMPONENT ?= cockpit
-.PHONY: check-jira-tickets
 check-jira-tickets:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
-		-c "/home/goose/wait_mcp_server.sh && /usr/local/bin/goose run --recipe recipes/check-jira-tickets.yaml \
+		-c "/usr/local/bin/goose run --recipe recipes/check-jira-tickets.yaml \
 			--params project=$(PROJECT) \
 			--params component=$(COMPONENT)"
 
-ISSUE ?= RHEL-78418
-.PHONY: issue-details
 issue-details:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
-		-c "/home/goose/wait_mcp_server.sh && /usr/local/bin/goose run --recipe recipes/issue-details.yaml \
+		-c "/usr/local/bin/goose run --recipe recipes/issue-details.yaml \
 			--params issue=$(ISSUE)"
 
-.PHONY: triage-issue
 triage-issue:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
 		-c "/home/goose/wait_mcp_server.sh && /usr/local/bin/goose run --recipe recipes/triage-issue.yaml \
 			--params issue=$(ISSUE)"
 
-PACKAGE ?= cockpit
-VERSION ?= 339
-JIRA_ISSUES ?= "RHEL-123"
-.PHONY: rebase-package
 rebase-package:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
@@ -63,36 +102,50 @@ rebase-package:
 			echo 'echo \$$GITLAB_TOKEN' >> \"\$$askpass\"; \
 			chmod +x \"\$$askpass\"; \
 			export GIT_ASKPASS=\"\$$askpass\"; \
-			/home/goose/wait_mcp_server.sh && /usr/local/bin/goose run --recipe recipes/rebase-package.yaml \
+			/usr/local/bin/goose run --recipe recipes/rebase-package.yaml \
 			--params package=$(PACKAGE) \
 			--params version=$(VERSION) \
 			--params jira_issues=$(JIRA_ISSUES) \
 			--params gitlab_user=$(GITLAB_USER) && echo 'Recipe completed. Dropping into shell...' && /bin/bash"
 
-PACKAGE ?= podman
-.PHONY: reverse-dependencies
 reverse-dependencies:
 	$(COMPOSE) run --rm \
 		--entrypoint /bin/sh goose \
 		-c "/usr/local/bin/goose run --recipe recipes/reverse-dependencies.yaml \
 			--params package=$(PACKAGE)"
-.PHONY: secrets
-secrets:
-	mkdir -p .secrets
-	cp -n templates/* .secrets
 
-.PHONY: clean
+test-package:
+	$(COMPOSE) run --rm \
+		--entrypoint /bin/sh goose \
+		-c "/usr/local/bin/goose run --recipe recipes/test-package.yaml \
+			--params git_url=$(GIT_URL) \
+			--params package=$(PACKAGE) \
+			--params dist_git_branch=$(DIST_GIT_BRANCH) \
+			--params compose=$(RPM_COMPOSE)"
+
+config: GLOBAL_TEMPLATE = templates/compose.env
+config: SECRET_TEMPLATES = $(filter-out $(GLOBAL_TEMPLATE), $(wildcard templates/*))
+config:
+	mkdir -p .secrets
+	cp -n $(SECRET_TEMPLATES) .secrets/
+	cp -n $(GLOBAL_TEMPLATE) .env
+
 clean:
 	$(COMPOSE) down
 	podman volume prune -f
 
 help:
 	@echo "Available targets:"
+	@echo "  config                      - Copy config templates to .secrets/ and .env"
 	@echo "  build                       - Build all images"
-	@echo "  run-mcp-atlassian           - Start MCP server in background"
-	@echo "  stop-mcp-atlassian          - Stop MCP server"
-	@echo "  logs-mcp-atlassian          - Show MCP server logs"
+	@echo "  run-mcp-atlassian           - Start Atlassian MCP server in background"
+	@echo "  stop-mcp-atlassian          - Stop Atlassian MCP server"
+	@echo "  logs-mcp-atlassian          - Show Atlassian MCP server logs"
+	@echo "  run-mcp-testing-farm        - Start testing-farm MCP server in background"
+	@echo "  stop-mcp-testing-farm       - Stop testing-farm MCP server"
+	@echo "  logs-mcp-testing-farm       - Show testing-farm MCP server logs"
 	@echo "  run-goose                   - Run goose interactively"
 	@echo "  run-goose-bash              - Run goose with bash shell"
+	@echo "  test-package                - Submit package testing request to testing farm"
 	@echo "  <recipe>                    - To run the recipes/<recipe>.yaml"
 	@echo "  clean                       - Stop all services and clean volumes"

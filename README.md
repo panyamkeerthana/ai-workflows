@@ -5,7 +5,7 @@ In this workflows we are using [MCP server for Atlassian tools](https://github.c
 
 ## Configure
 
-Secrets such as tokens are managed in the form of environment files.  The templates for those files can be found in the `./templates` directory.  To configure the deployment, run `make secrets` first to copy the files to the `.secrets` directory where you can manually edit the files to add your tokens and more.
+Secrets such as tokens are managed in the form of environment files.  The templates for those files can be found in the `./templates` directory.  To configure the deployment, run `make config` first to copy the files to the `.secrets` directory where you can manually edit the files to add your tokens and more. This step also sets up a .env file in the toplevel directory.
 
 
  `GOOGLE_API_KEY`: take it from Google Cloud -> API & Services -> Credentials -> API Keys -> show key)
@@ -20,13 +20,11 @@ If you need to change the llm provider and model, they are stored in the Goose c
 
 ## Run Goose - interactively - with the MCP Atlassian server
 
-Run the Jira MCP server from Atlassian and Goose separately, otherwise not all the input from your terminal 
-is always redirected to the Goose container.
+To run goose interactively, don't be tempted to run `podman compose up` or similar, because input from your terminal might not be directed to the Goose container. Instead use:
 
-1. `make run-mcp-atlassian`
-2. `make run-goose` (Requires enabling the [Generative Language API](https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/) or another LLM provider and configuring the environment variables as described in the [configuration docs](https://block.github.io/goose/docs/guides/config-file#global-settings).)
-3. Type *List all In Progress issues at https://issues.redhat.com/projects/LD* and wait for the output.
-4. `make clean`
+1. `make run-goose` (Requires enabling the [Generative Language API](https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/) or another LLM provider and configuring the environment variables as described in the [configuration docs](https://block.github.io/goose/docs/guides/config-file#global-settings).)
+2. Type *List all In Progress issues at https://issues.redhat.com/projects/LD* and wait for the output.
+3. `make clean`
 
 You can further manually run test and run the Goose recipes which are mounted into the container at `/home/goose/recipes`.
 

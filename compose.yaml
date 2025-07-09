@@ -1,16 +1,40 @@
+version: "2.4"
 services:
   mcp-atlassian:
     image: ghcr.io/sooperset/mcp-atlassian:latest
     ports:
-      - "9000:9000"
+      - published: "${MCP_ATLASSIAN_PORT}"
+        target: "${MCP_ATLASSIAN_PORT}"
     env_file:
       - .secrets/mcp-atlassian.env
-    command: ["--transport", "sse", "--port", "9000", "-vv"]
+    command: ["--transport", "sse", "--port", "${MCP_ATLASSIAN_PORT}", "-vv"]
     restart: unless-stopped
+    healthcheck:
+      test: wget --spider -q "http://127.0.0.1:${MCP_ATLASSIAN_PORT}/healthz"
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  mcp-testing-farm:
+    image: ghcr.io/thrix/testing-farm-mcp:latest
+    ports:
+      - published: "${MCP_TESTING_FARM_PORT}"
+        target: "${MCP_TESTING_FARM_PORT}"
+    env_file:
+      - .secrets/mcp-testing-farm.env
+    entrypoint: [ "fastmcp" ]
+    command: ["run", "/app/testing_farm_mcp/server.py:mcp", "--transport", "sse", "--port", "${MCP_TESTING_FARM_PORT}", "--host", "0.0.0.0", "--log-level", "DEBUG"]
+    restart: unless-stopped
+    healthcheck:
+      test: wget --spider -q "http://127.0.0.1:${MCP_TESTING_FARM_PORT}/sse"
+      interval: 2s
+      timeout: 2s
+      retries: 30
 
   goose:
     depends_on:
-      - mcp-atlassian
+      mcp-atlassian: { condition: service_healthy }
+      mcp-testing-farm: { condition: service_healthy }
     image: goose-container
     build:
       context: ./goose-container
@@ -21,7 +45,6 @@ services:
       - home-goose-persistent:/home/goose
       - ./goose-recipes:/home/goose/recipes:ro,z
       - ./goose-container/goose-config.yaml:/home/goose/.config/goose/config.yaml:ro,z
-      - ./goose-container/wait_mcp_server.sh:/home/goose/wait_mcp_server.sh:ro,z
     stdin_open: true
     tty: true
     restart: "no"
