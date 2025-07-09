@@ -76,10 +76,14 @@ reverse-dependencies:
 		--entrypoint /bin/sh goose \
 		-c "/usr/local/bin/goose run --recipe recipes/reverse-dependencies.yaml \
 			--params package=$(PACKAGE)"
-.PHONY: secrets
-secrets:
+
+GLOBAL_TEMPLATE = templates/compose.env
+SECRET_TEMPLATES = $(filter-out $(GLOBAL_TEMPLATE), $(wildcard templates/*))
+.PHONY: config
+config:
 	mkdir -p .secrets
-	cp -n templates/* .secrets
+	cp -n $(SECRET_TEMPLATES) .secrets/
+	cp -n $(GLOBAL_TEMPLATE) .env
 
 .PHONY: clean
 clean:
@@ -88,6 +92,7 @@ clean:
 
 help:
 	@echo "Available targets:"
+	@echo "  config                      - Copy config templates to .secrets/ and .env"
 	@echo "  build                       - Build all images"
 	@echo "  run-mcp-atlassian           - Start MCP server in background"
 	@echo "  stop-mcp-atlassian          - Stop MCP server"

@@ -5,7 +5,7 @@ In this workflows we are using [MCP server for Atlassian tools](https://github.c
 
 ## Configure
 
-Secrets such as tokens are managed in the form of environment files.  The templates for those files can be found in the `./templates` directory.  To configure the deployment, run `make secrets` first to copy the files to the `.secrets` directory where you can manually edit the files to add your tokens and more.
+Secrets such as tokens are managed in the form of environment files.  The templates for those files can be found in the `./templates` directory.  To configure the deployment, run `make config` first to copy the files to the `.secrets` directory where you can manually edit the files to add your tokens and more. This step also sets up a .env file in the toplevel directory.
 
 
  `GOOGLE_API_KEY`: take it from Google Cloud -> API & Services -> Credentials -> API Keys -> show key)
