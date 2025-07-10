@@ -21,6 +21,7 @@
 .PHONY: reverse-dependencies
 .PHONY: test-package
 .PHONY: triage-issue
+.PHONY: backport-fix
 
 ## Defaults
 COMPOSE ?= podman compose
@@ -106,6 +107,22 @@ rebase-package:
 			--params package=$(PACKAGE) \
 			--params version=$(VERSION) \
 			--params jira_issues=$(JIRA_ISSUES) \
+			--params gitlab_user=$(GITLAB_USER) && echo 'Recipe completed. Dropping into shell...' && /bin/bash"
+
+backport-fix:
+	$(COMPOSE) run --rm \
+		--entrypoint /bin/sh goose \
+		-c "set -e; \
+			set +x; \
+			askpass=\"\$$(mktemp)\"; \
+			echo '#!/bin/sh' > \"\$$askpass\"; \
+			echo 'echo \$$GITLAB_TOKEN' >> \"\$$askpass\"; \
+			chmod +x \"\$$askpass\"; \
+			export GIT_ASKPASS=\"\$$askpass\"; \
+			/home/goose/wait_mcp_server.sh && /usr/local/bin/goose run --recipe recipes/backport-fix.yaml \
+			--params package=$(PACKAGE) \
+			--params upstream_fix=$(BACKPORT_FIX) \
+			--params jira_issue=$(JIRA_ISSUE) \
 			--params gitlab_user=$(GITLAB_USER) && echo 'Recipe completed. Dropping into shell...' && /bin/bash"
 
 reverse-dependencies:
