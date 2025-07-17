@@ -43,3 +43,7 @@ This project uses [pre-commit](https://pre-commit.com/) hooks. To set up:
 pip install pre-commit
 pre-commit install
 ```
+
+## Production
+
+This project is deployed in the `jotnar-prod` namespace on the Cyborg Openshift cluster. Members of `jotnar` LDAP group have admin access to it.
