@@ -11,6 +11,7 @@ Secrets such as tokens are managed in the form of environment files.  The templa
  `GOOGLE_API_KEY`: take it from Google Cloud -> API & Services -> Credentials -> API Keys -> show key)
 `JIRA_PERSONAL_TOKEN`: create PATs in your Jira/Confluence profile settings - usually under "Personal Access Tokens"
 `GITLAB_TOKEN` with read permissions (read_user, read_repository, read_api).  Note that some recipes require write access to Gitlab: use it at your own risk.
+`TESTING_FARM_API_TOKEN`: required and can be generated from https://testing-farm.io/tokens/.
 
 If you need to change the llm provider and model, they are stored in the Goose config file: `goose-container/goose-config.yaml` (`GOOSE_PROVIDER`, `GOOSE_MODEL`)
 
