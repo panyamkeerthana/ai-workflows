@@ -27,7 +27,4 @@ async def mcp_tools(
         tools = await MCPTool.from_client(session)
         if filter:
             tools = [t for t in tools if filter(t.name)]
-        try:
-            yield tools
-        finally:
-            await MCPTool.cleanup()
+        yield tools
