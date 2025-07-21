@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from beeai_framework.agents.experimental.requirements.conditional import (
     ConditionalRequirement,
 )
+from beeai_framework.backend import ChatModel
 from beeai_framework.errors import FrameworkError
 from beeai_framework.memory import UnconstrainedMemory
 from beeai_framework.middleware.trajectory import GlobalTrajectoryMiddleware
@@ -17,7 +18,6 @@ from beeai_framework.tools.search.duckduckgo import DuckDuckGoSearchTool
 from beeai_framework.tools.think import ThinkTool
 
 from base_agent import BaseAgent, TInputSchema, TOutputSchema
-from gemini import GeminiChatModel
 from observability import setup_observability
 from tools import ShellCommandTool
 from triage_agent import RebaseData, ErrorData
@@ -53,7 +53,7 @@ class OutputSchema(BaseModel):
 class RebaseAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(
-            llm=GeminiChatModel(),
+            llm=ChatModel.from_name(os.getenv("CHAT_MODEL")),
             tools=[ThinkTool(), ShellCommandTool(), DuckDuckGoSearchTool()],
             memory=UnconstrainedMemory(),
             requirements=[
