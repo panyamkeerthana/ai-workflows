@@ -45,6 +45,10 @@ pip install pre-commit
 pre-commit install
 ```
 
+## Container Images
+
+Container images are available at the [jotnar](https://quay.io/organization/jotnar) organization on quay.io.
+
 ## Production
 
 This project is deployed in the `jotnar-prod` namespace on the Cyborg Openshift cluster. Members of `jotnar` LDAP group have admin access to it.
