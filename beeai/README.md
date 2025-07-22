@@ -3,25 +3,43 @@
 A set of AI agents implemented in the BeeAI Framework, interconnected via Redis.
 Every agent can run individually or pick up tasks from a Redis queue.
 
+## Architecture
+
+Three agents process tasks through Redis queues:
+- **Triage Agent**: Analyzes JIRA issues and determines resolution path
+- **Rebase Agent**: Updates packages to newer upstream versions
+- **Backport Agent**: Applies specific fixes/patches to packages
+
 ## Setup
 
 Copy the `templates` directory to `.secrets` and fill in required information.
 
-## Running the workflow
+## Running as a service
 
-Start the agents using e.g. `make run-triage-agent` or `make run-triage-agent-detached`. This will automatically
-start all the related services. There is currently no mechanism to initiate the workflow other than manually
-pushing a task to the `triage_queue` Redis list. The easiest way to do that is with:
+The agents run continuously, waiting for work from Redis queues. To process a JIRA issue:
 
+**Step 1: Start the system** (if not already running)
 ```bash
-podman compose exec valkey -- redis-cli lpush triage_queue '{"metadata":{"issue":"RHEL-12345"}}'
+make start
+```
+
+This runs the services in the foreground, showing logs for monitoring and debugging. If you prefer to run the services in the background, use `make start-detached` instead.
+
+**Step 2: Trigger work**
+```bash
+make trigger-pipeline JIRA_ISSUE=RHEL-12345
 ```
 
 ## Running individual agents
 
-You can run any agent individually with the appropriate make target, passing required input data
-via environment variables, e.g. `make JIRA_ISSUE=RHEL-12345 run-triage-agent-standalone`.
+You can run any agent individually with the appropriate make target, passing required input data via environment variables, e.g. `make JIRA_ISSUE=RHEL-12345 run-triage-agent-standalone`.
 The agent will run only once, print its output and exit.
+
+```bash
+make JIRA_ISSUE=RHEL-12345 run-triage-agent-standalone
+make PACKAGE=httpd VERSION=2.4.62 JIRA_ISSUE=RHEL-12345 BRANCH=c10s run-rebase-agent-standalone
+make PACKAGE=httpd UPSTREAM_FIX=https://github.com/... JIRA_ISSUE=RHEL-12345 BRANCH=c10s run-backport-agent-standalone
+```
 
 ## Observability
 

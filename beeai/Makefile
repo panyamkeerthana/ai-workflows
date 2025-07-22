@@ -7,49 +7,19 @@ COMPOSE ?= $(shell command -v podman >/dev/null 2>&1 && echo "podman compose" ||
 build:
 	$(COMPOSE) -f $(COMPOSE_FILE) build
 
-.PHONY: start-mcp
-start-mcp:
-	$(COMPOSE) -f $(COMPOSE_FILE) up -d mcp-atlassian
-
-.PHONY: stop-mcp
-stop-mcp:
-	$(COMPOSE) -f $(COMPOSE_FILE) stop mcp-atlassian
-
-.PHONY: start-valkey
-start-valkey:
-	$(COMPOSE) -f $(COMPOSE_FILE) up -d valkey
-
-.PHONY: stop-valkey
-stop-valkey:
-	$(COMPOSE) -f $(COMPOSE_FILE) stop valkey
-
-.PHONY: start-phoenix
-start-phoenix:
-	$(COMPOSE) -f $(COMPOSE_FILE) up -d phoenix
-
-.PHONY: stop-phoenix
-stop-phoenix:
-	$(COMPOSE) -f $(COMPOSE_FILE) stop phoenix
 
 .PHONY: run-beeai-bash
 run-beeai-bash:
-	$(COMPOSE) -f $(COMPOSE_FILE) run --rm beeai-agent /bin/bash
+	$(COMPOSE) -f $(COMPOSE_FILE) run --rm triage-agent /bin/bash
 
 .PHONY: run-triage-agent-standalone
 run-triage-agent-standalone:
 	$(COMPOSE) -f $(COMPOSE_FILE) run --rm \
 		-e JIRA_ISSUE=$(JIRA_ISSUE) \
-		beeai-agent /usr/bin/python agents/triage_agent.py
+		triage-agent
 
-.PHONY: run-triage-agent
-run-triage-agent:
-	$(COMPOSE) -f $(COMPOSE_FILE) run --rm \
-		beeai-agent /usr/bin/python agents/triage_agent.py
 
-.PHONY: run-triage-agent-detached
-run-triage-agent-detached:
-	$(COMPOSE) -f $(COMPOSE_FILE) run --rm --detach \
-		beeai-agent /usr/bin/python agents/triage_agent.py
+
 
 .PHONY: run-rebase-agent-standalone
 run-rebase-agent-standalone:
@@ -58,17 +28,11 @@ run-rebase-agent-standalone:
 		-e VERSION=$(VERSION) \
 		-e JIRA_ISSUE=$(JIRA_ISSUE) \
 		-e BRANCH=$(BRANCH) \
-		beeai-agent /usr/bin/python agents/rebase_agent.py
+		rebase-agent
 
-.PHONY: run-rebase-agent
-run-rebase-agent:
-	$(COMPOSE) -f $(COMPOSE_FILE) run --rm \
-		beeai-agent /usr/bin/python agents/rebase_agent.py
 
-.PHONY: run-rebase-agent-detached
-run-rebase-agent-detached:
-	$(COMPOSE) -f $(COMPOSE_FILE) run --rm --detach \
-		beeai-agent /usr/bin/python agents/rebase_agent.py
+
+
 
 .PHONY: run-backport-agent-standalone
 run-backport-agent-standalone:
@@ -77,17 +41,57 @@ run-backport-agent-standalone:
 		-e UPSTREAM_FIX=$(UPSTREAM_FIX) \
 		-e JIRA_ISSUE=$(JIRA_ISSUE) \
 		-e BRANCH=$(BRANCH) \
-		beeai-agent /usr/bin/python agents/backport_agent.py
+		backport-agent
 
-.PHONY: run-backport-agent
-run-backport-agent:
-	$(COMPOSE) -f $(COMPOSE_FILE) run --rm \
-		beeai-agent /usr/bin/python agents/backport_agent.py
 
-.PHONY: run-backport-agent-detached
-run-backport-agent-detached:
-	$(COMPOSE) -f $(COMPOSE_FILE) run --rm --detach \
-		beeai-agent /usr/bin/python agents/backport_agent.py
+
+
+
+# Essential 3-Agent Architecture Targets
+
+.PHONY: start
+start:
+	$(COMPOSE) -f $(COMPOSE_FILE) up
+
+.PHONY: start-detached
+start-detached:
+	$(COMPOSE) -f $(COMPOSE_FILE) up -d
+
+.PHONY: stop
+stop:
+	$(COMPOSE) -f $(COMPOSE_FILE) down
+
+
+
+.PHONY: logs-triage
+logs-triage:
+	$(COMPOSE) -f $(COMPOSE_FILE) logs -f triage-agent
+
+.PHONY: logs-backport
+logs-backport:
+	$(COMPOSE) -f $(COMPOSE_FILE) logs -f backport-agent
+
+.PHONY: logs-rebase
+logs-rebase:
+	$(COMPOSE) -f $(COMPOSE_FILE) logs -f rebase-agent
+
+.PHONY: status
+status:
+	$(COMPOSE) -f $(COMPOSE_FILE) ps
+
+.PHONY: trigger-pipeline
+trigger-pipeline:
+	@if [ -z "$(JIRA_ISSUE)" ]; then \
+		echo "Usage: make trigger-pipeline JIRA_ISSUE=RHEL-12345"; \
+		exit 1; \
+	fi
+	@echo "Triggering pipeline for issue: $(JIRA_ISSUE)"
+	$(COMPOSE) -f $(COMPOSE_FILE) exec valkey redis-cli LPUSH triage_queue '{"metadata": {"issue": "$(JIRA_ISSUE)"}}'
+
+.PHONY: redis-cli
+redis-cli:
+	$(COMPOSE) -f $(COMPOSE_FILE) exec valkey redis-cli
+
 
 .PHONY: clean
 clean:

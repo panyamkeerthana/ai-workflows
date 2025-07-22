@@ -1,3 +1,24 @@
+# Base template for BeeAI agents
+x-beeai-agent: &beeai-agent
+  depends_on:
+    - mcp-atlassian
+    - valkey
+    - phoenix
+  image: beeai-agent
+  build:
+    context: .
+    dockerfile: Containerfile
+  environment:
+    - MCP_JIRA_URL=http://mcp-atlassian:9000/sse
+    - REDIS_URL=redis://valkey:6379/0
+    - COLLECTOR_ENDPOINT=http://phoenix:6006/v1/traces
+    - MAX_RETRIES=3
+  env_file:
+    - .secrets/beeai-agent.env
+  volumes:
+    - ./agents:/home/beeai/agents:ro,z
+  restart: unless-stopped
+
 services:
   mcp-atlassian:
     image: ghcr.io/sooperset/mcp-atlassian:latest
@@ -22,26 +43,17 @@ services:
       - phoenix-data:/mnt/data
     restart: unless-stopped
 
-  beeai-agent:
-    depends_on:
-      - mcp-atlassian
-      - valkey
-      - phoenix
-    image: beeai-agent
-    build:
-      context: .
-      dockerfile: Containerfile
-    environment:
-      - MCP_JIRA_URL=http://mcp-atlassian:9000/sse
-      - REDIS_URL=redis://valkey:6379/0
-      - COLLECTOR_ENDPOINT=http://phoenix:6006/v1/traces
-    env_file:
-      - .secrets/beeai-agent.env
-    volumes:
-      - ./agents:/home/beeai/agents:ro,z
-    stdin_open: true
-    tty: true
-    restart: "no"
+  triage-agent:
+    <<: *beeai-agent
+    command: ["python", "agents/triage_agent.py"]
+
+  backport-agent:
+    <<: *beeai-agent
+    command: ["python", "agents/backport_agent.py"]
+
+  rebase-agent:
+    <<: *beeai-agent
+    command: ["python", "agents/rebase_agent.py"]
 
 volumes:
   valkey-data:
