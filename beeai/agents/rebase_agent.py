@@ -13,15 +13,17 @@ from beeai_framework.backend import ChatModel
 from beeai_framework.errors import FrameworkError
 from beeai_framework.memory import UnconstrainedMemory
 from beeai_framework.middleware.trajectory import GlobalTrajectoryMiddleware
+from beeai_framework.template import PromptTemplate, PromptTemplateInput
 from beeai_framework.tools import Tool
 from beeai_framework.tools.search.duckduckgo import DuckDuckGoSearchTool
 from beeai_framework.tools.think import ThinkTool
 
 from base_agent import BaseAgent, TInputSchema, TOutputSchema
+from constants import COMMIT_PREFIX, BRANCH_PREFIX
 from observability import setup_observability
 from tools import ShellCommandTool
 from triage_agent import RebaseData, ErrorData
-from utils import redis_client
+from utils import redis_client, get_git_finalization_steps
 
 
 class InputSchema(BaseModel):
@@ -69,6 +71,33 @@ class RebaseAgent(BaseAgent):
     @property
     def output_schema(self) -> type[TOutputSchema]:
         return OutputSchema
+
+    def _render_prompt(self, input: TInputSchema) -> str:
+        # Define template function that can be called from the template
+        def rebase_git_steps(data: dict) -> str:
+            input_data = self.input_schema.model_validate(data)
+            return get_git_finalization_steps(
+                package=input_data.package,
+                jira_issue=input_data.jira_issue,
+                commit_title=f"{COMMIT_PREFIX} Update to version {input_data.version}",
+                files_to_commit="*.spec",
+                branch_name=f"{BRANCH_PREFIX}-{input_data.version}",
+                git_user=input_data.git_user,
+                git_email=input_data.git_email,
+                git_url=input_data.git_url,
+                dist_git_branch=input_data.dist_git_branch,
+            )
+
+        template = PromptTemplate(
+            PromptTemplateInput(
+                schema=self.input_schema,
+                template=self.prompt,
+                functions={
+                    "rebase_git_steps": rebase_git_steps
+                }
+            )
+        )
+        return template.render(input)
 
     @property
     def prompt(self) -> str:
@@ -131,16 +160,7 @@ class RebaseAgent(BaseAgent):
               * Generate the SRPM using `rpmbuild -bs` (ensure your .spec file and source files are correctly
                 copied to the build environment as required by the command).
 
-          6. Commit the changes:
-              * The title of the Git commit should be in the format "[DO NOT MERGE: AI EXPERIMENTS] Update to version {{ version }}"
-              * Include the reference to Jira as "Resolves: <jira_issue>" for each issue in {{ jira_issues }}.
-              * Commit just the specfile change.
-
-          7. Open a merge request:
-            * Authenticate using `glab`
-            * Push the commit to the fork.
-            * Open a merge request against the upstream repository of the {{ package }} in {{ git_url }}
-              with previously created commit.
+          6. {{ rebase_git_steps }}
 
           Report the status of the rebase operation including:
           - Whether the package was already up to date
@@ -161,7 +181,10 @@ async def main() -> None:
         and (branch := os.getenv("BRANCH", None))
     ):
         input = InputSchema(
-            package=package, version=version, jira_issue=jira_issue, dist_git_branch=branch
+            package=package,
+            version=version,
+            jira_issue=jira_issue,
+            dist_git_branch=branch,
         )
         output = await agent.run_with_schema(input)
         print(output.model_dump_json(indent=4))
