@@ -41,6 +41,12 @@ make PACKAGE=httpd VERSION=2.4.62 JIRA_ISSUE=RHEL-12345 BRANCH=c10s run-rebase-a
 make PACKAGE=httpd UPSTREAM_FIX=https://github.com/... JIRA_ISSUE=RHEL-12345 BRANCH=c10s run-backport-agent-standalone
 ```
 
+## Dry-Run mode
+
+Both backport and rebase agents support **dry-run mode** for testing workflows without actually pushing changes or creating merge requests. By default, agents run in **production mode** and will create actual commits, pushes, and merge requests.
+
+To enable dry-run mode for testing, set the `DRY_RUN=true` environment variable.
+
 ## Observability
 
 You can connect to http://localhost:6006/ to access Phoenix web interface and trace agents

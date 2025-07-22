@@ -1,5 +1,6 @@
 IMAGE_NAME ?= beeai-agent
 COMPOSE_FILE ?= compose.yaml
+DRY_RUN ?= false
 
 COMPOSE ?= $(shell command -v podman >/dev/null 2>&1 && echo "podman compose" || echo "docker-compose")
 
@@ -28,6 +29,7 @@ run-rebase-agent-standalone:
 		-e VERSION=$(VERSION) \
 		-e JIRA_ISSUE=$(JIRA_ISSUE) \
 		-e BRANCH=$(BRANCH) \
+		-e DRY_RUN=$(DRY_RUN) \
 		rebase-agent
 
 
@@ -41,6 +43,7 @@ run-backport-agent-standalone:
 		-e UPSTREAM_FIX=$(UPSTREAM_FIX) \
 		-e JIRA_ISSUE=$(JIRA_ISSUE) \
 		-e BRANCH=$(BRANCH) \
+		-e DRY_RUN=$(DRY_RUN) \
 		backport-agent
 
 
@@ -51,11 +54,11 @@ run-backport-agent-standalone:
 
 .PHONY: start
 start:
-	$(COMPOSE) -f $(COMPOSE_FILE) up
+	DRY_RUN=$(DRY_RUN) $(COMPOSE) -f $(COMPOSE_FILE) up
 
 .PHONY: start-detached
 start-detached:
-	$(COMPOSE) -f $(COMPOSE_FILE) up -d
+	DRY_RUN=$(DRY_RUN) $(COMPOSE) -f $(COMPOSE_FILE) up -d
 
 .PHONY: stop
 stop:

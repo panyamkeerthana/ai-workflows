@@ -13,15 +13,17 @@ from beeai_framework.backend import ChatModel
 from beeai_framework.errors import FrameworkError
 from beeai_framework.memory import UnconstrainedMemory
 from beeai_framework.middleware.trajectory import GlobalTrajectoryMiddleware
+from beeai_framework.template import PromptTemplate, PromptTemplateInput
 from beeai_framework.tools import Tool
 from beeai_framework.tools.search.duckduckgo import DuckDuckGoSearchTool
 from beeai_framework.tools.think import ThinkTool
 
 from base_agent import BaseAgent, TInputSchema, TOutputSchema
+from constants import COMMIT_PREFIX, BRANCH_PREFIX
 from observability import setup_observability
 from tools import ShellCommandTool
 from triage_agent import BackportData, ErrorData
-from utils import redis_client
+from utils import redis_client, get_git_finalization_steps
 
 
 class InputSchema(BaseModel):
@@ -70,6 +72,33 @@ class BackportAgent(BaseAgent):
     def output_schema(self) -> type[TOutputSchema]:
         return OutputSchema
 
+    def _render_prompt(self, input: TInputSchema) -> str:
+        # Define template function that can be called from the template
+        def backport_git_steps(data: dict) -> str:
+            input_data = self.input_schema.model_validate(data)
+            return get_git_finalization_steps(
+                package=input_data.package,
+                jira_issue=input_data.jira_issue,
+                commit_title=f"{COMMIT_PREFIX} backport {input_data.jira_issue}",
+                files_to_commit=f"*.spec and {input_data.jira_issue}.patch",
+                branch_name=f"{BRANCH_PREFIX}-{input_data.jira_issue}",
+                git_user=input_data.git_user,
+                git_email=input_data.git_email,
+                git_url=input_data.git_url,
+                dist_git_branch=input_data.dist_git_branch,
+            )
+
+        template = PromptTemplate(
+            PromptTemplateInput(
+                schema=self.input_schema,
+                template=self.prompt,
+                functions={
+                    "backport_git_steps": backport_git_steps
+                }
+            )
+        )
+        return template.render(input)
+
     @property
     def prompt(self) -> str:
         return """
@@ -106,16 +135,7 @@ class BackportAgent(BaseAgent):
               to the build environment as required by the command).
             * Verify the newly added patch applies cleanly using the command `centpkg prep`.
 
-          6. Commit the changes:
-            * The title of the Git commit should be in the format "[DO NOT MERGE: AI EXPERIMENTS] backport {{ jira_issue }}"
-            * Include the reference to Jira as "Resolves: <jira_issue>" for the issue {{ jira_issue }}.
-            * Commit the RPM spec file change and the newly added patch file.
-            * Push the commit to the fork.
-
-           7. Open a merge request:
-             * Authenticate using `glab`
-             * Open a merge request against the upstream repository of the {{ package }} in {{ git_url }}
-               with previously created commit.
+          6. {{ backport_git_steps }}
         """
 
 

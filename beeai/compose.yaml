@@ -13,6 +13,7 @@ x-beeai-agent: &beeai-agent
     - REDIS_URL=redis://valkey:6379/0
     - COLLECTOR_ENDPOINT=http://phoenix:6006/v1/traces
     - MAX_RETRIES=3
+    - DRY_RUN=${DRY_RUN:-false}
   env_file:
     - .secrets/beeai-agent.env
   volumes:
