@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import sys
 import traceback
@@ -25,6 +26,7 @@ from tools import ShellCommandTool
 from triage_agent import RebaseData, ErrorData
 from utils import redis_client, get_git_finalization_steps
 
+logger = logging.getLogger(__name__)
 
 class InputSchema(BaseModel):
     package: str = Field(description="Package to update")
@@ -171,6 +173,8 @@ class RebaseAgent(BaseAgent):
 
 
 async def main() -> None:
+    logging.basicConfig(level=logging.INFO)
+
     setup_observability(os.getenv("COLLECTOR_ENDPOINT"))
     agent = RebaseAgent()
 
@@ -180,6 +184,7 @@ async def main() -> None:
         and (jira_issue := os.getenv("JIRA_ISSUE", None))
         and (branch := os.getenv("BRANCH", None))
     ):
+        logger.info("Running in direct mode with environment variables")
         input = InputSchema(
             package=package,
             version=version,
@@ -187,22 +192,34 @@ async def main() -> None:
             dist_git_branch=branch,
         )
         output = await agent.run_with_schema(input)
-        print(output.model_dump_json(indent=4))
+        logger.info(f"Direct run completed: {output.model_dump_json(indent=4)}")
         return
 
     class Task(BaseModel):
         metadata: dict = Field(description="Task metadata")
         attempts: int = Field(default=0, description="Number of processing attempts")
 
+    logger.info("Starting rebase agent in queue mode")
     async with redis_client(os.getenv("REDIS_URL")) as redis:
         max_retries = int(os.getenv("MAX_RETRIES", 3))
+        logger.info(f"Connected to Redis, max retries set to {max_retries}")
+
         while True:
+            logger.info("Waiting for tasks from rebase_queue (timeout: 30s)...")
             element = await redis.brpop("rebase_queue", timeout=30)
             if element is None:
+                logger.info("No tasks received, continuing to wait...")
                 continue
+
             _, payload = element
+            logger.info(f"Received task from queue.")
+
             task = Task.model_validate_json(payload)
             rebase_data = RebaseData.model_validate(task.metadata)
+            logger.info(f"Processing rebase for package: {rebase_data.package}, "
+                       f"version: {rebase_data.version}, JIRA: {rebase_data.jira_issue}, "
+                       f"attempt: {task.attempts + 1}")
+
             input = InputSchema(
                 package=rebase_data.package,
                 version=rebase_data.version,
@@ -213,22 +230,32 @@ async def main() -> None:
             async def retry(task, error):
                 task.attempts += 1
                 if task.attempts < max_retries:
+                    logger.warning(f"Task failed (attempt {task.attempts}/{max_retries}), "
+                                 f"re-queuing for retry: {rebase_data.jira_issue}")
                     await redis.lpush("rebase_queue", task.model_dump_json())
                 else:
+                    logger.error(f"Task failed after {max_retries} attempts, "
+                               f"moving to error list: {rebase_data.jira_issue}")
                     await redis.lpush("error_list", error)
 
             try:
+                logger.info(f"Starting rebase processing for {rebase_data.jira_issue}")
                 output = await agent.run_with_schema(input)
+                logger.info(f"Rebase processing completed for {rebase_data.jira_issue}, "
+                          f"success: {output.success}")
             except Exception as e:
                 error = "".join(traceback.format_exception(e))
-                print(error, file=sys.stderr)
+                logger.error(f"Exception during rebase processing for {rebase_data.jira_issue}: {error}")
                 await retry(
                     task, ErrorData(details=error, jira_issue=input.jira_issue).model_dump_json()
                 )
             else:
                 if output.success:
+                    logger.info(f"Rebase successful for {rebase_data.jira_issue}, "
+                              f"adding to completed list")
                     await redis.lpush("completed_rebase_list", output.model_dump_json())
                 else:
+                    logger.warning(f"Rebase failed for {rebase_data.jira_issue}: {output.error}")
                     await retry(task, output.error)
 
 

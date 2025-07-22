@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import sys
 import traceback
@@ -24,6 +25,8 @@ from observability import setup_observability
 from tools import ShellCommandTool
 from triage_agent import BackportData, ErrorData
 from utils import redis_client, get_git_finalization_steps
+
+logger = logging.getLogger(__name__)
 
 
 class InputSchema(BaseModel):
@@ -140,6 +143,8 @@ class BackportAgent(BaseAgent):
 
 
 async def main() -> None:
+    logging.basicConfig(level=logging.INFO)
+
     setup_observability(os.getenv("COLLECTOR_ENDPOINT"))
     agent = BackportAgent()
 
@@ -149,6 +154,7 @@ async def main() -> None:
         and (jira_issue := os.getenv("JIRA_ISSUE", None))
         and (branch := os.getenv("BRANCH", None))
     ):
+        logger.info("Running in direct mode with environment variables")
         input = InputSchema(
             package=package,
             upstream_fix=upstream_fix,
@@ -156,22 +162,33 @@ async def main() -> None:
             dist_git_branch=branch,
         )
         output = await agent.run_with_schema(input)
-        print(output.model_dump_json(indent=4))
+        logger.info(f"Direct run completed: {output.model_dump_json(indent=4)}")
         return
 
     class Task(BaseModel):
         metadata: dict = Field(description="Task metadata")
         attempts: int = Field(default=0, description="Number of processing attempts")
 
+    logger.info("Starting backport agent in queue mode")
     async with redis_client(os.getenv("REDIS_URL")) as redis:
         max_retries = int(os.getenv("MAX_RETRIES", 3))
+        logger.info(f"Connected to Redis, max retries set to {max_retries}")
+
         while True:
+            logger.info("Waiting for tasks from backport_queue (timeout: 30s)...")
             element = await redis.brpop("backport_queue", timeout=30)
             if element is None:
+                logger.info("No tasks received, continuing to wait...")
                 continue
+
             _, payload = element
+            logger.info(f"Received task from queue.")
+
             task = Task.model_validate_json(payload)
             backport_data = BackportData.model_validate(task.metadata)
+            logger.info(f"Processing backport for package: {backport_data.package}, "
+                       f"JIRA: {backport_data.jira_issue}, attempt: {task.attempts + 1}")
+
             input = InputSchema(
                 package=backport_data.package,
                 upstream_fix=backport_data.patch_url,
@@ -182,22 +199,32 @@ async def main() -> None:
             async def retry(task, error):
                 task.attempts += 1
                 if task.attempts < max_retries:
+                    logger.warning(f"Task failed (attempt {task.attempts}/{max_retries}), "
+                                 f"re-queuing for retry: {backport_data.jira_issue}")
                     await redis.lpush("backport_queue", task.model_dump_json())
                 else:
+                    logger.error(f"Task failed after {max_retries} attempts, "
+                               f"moving to error list: {backport_data.jira_issue}")
                     await redis.lpush("error_list", error)
 
             try:
+                logger.info(f"Starting backport processing for {backport_data.jira_issue}")
                 output = await agent.run_with_schema(input)
+                logger.info(f"Backport processing completed for {backport_data.jira_issue}, "
+                          f"success: {output.success}")
             except Exception as e:
                 error = "".join(traceback.format_exception(e))
-                print(error, file=sys.stderr)
+                logger.error(f"Exception during backport processing for {backport_data.jira_issue}: {error}")
                 await retry(
                     task, ErrorData(details=error, jira_issue=input.jira_issue).model_dump_json()
                 )
             else:
                 if output.success:
+                    logger.info(f"Backport successful for {backport_data.jira_issue}, "
+                              f"adding to completed list")
                     await redis.lpush("completed_backport_list", output.model_dump_json())
                 else:
+                    logger.warning(f"Backport failed for {backport_data.jira_issue}: {output.error}")
                     await retry(task, output.error)
 
 
