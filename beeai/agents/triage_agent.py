@@ -84,7 +84,7 @@ class TriageAgent(BaseAgent):
                 ConditionalRequirement("jira_get_issue", min_invocations=1),
                 ConditionalRequirement(ShellCommandTool, only_after="jira_get_issue"),
             ],
-            middlewares=[GlobalTrajectoryMiddleware()],
+            middlewares=[GlobalTrajectoryMiddleware(pretty=True)],
         )
 
     @property

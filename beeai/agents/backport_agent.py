@@ -59,7 +59,7 @@ class BackportAgent(BaseAgent):
             requirements=[
                 ConditionalRequirement(ThinkTool, force_after=Tool, consecutive_allowed=False),
             ],
-            middlewares=[GlobalTrajectoryMiddleware()],
+            middlewares=[GlobalTrajectoryMiddleware(pretty=True)],
         )
 
     @property
