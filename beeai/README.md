@@ -51,3 +51,5 @@ To enable dry-run mode for testing, set the `DRY_RUN=true` environment variable.
 
 You can connect to http://localhost:6006/ to access Phoenix web interface and trace agents
 (it works with individual runs too).
+
+Redis Commander is available at http://localhost:8081/ for monitoring of the queue.

@@ -44,6 +44,16 @@ services:
       - phoenix-data:/mnt/data
     restart: unless-stopped
 
+  redis-commander:
+    image: ghcr.io/joeferner/redis-commander:0.9.0
+    environment:
+      - REDIS_HOSTS=local:valkey:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - valkey
+    restart: unless-stopped
+
   triage-agent:
     <<: *beeai-agent
     command: ["python", "agents/triage_agent.py"]
