@@ -2,6 +2,7 @@ FROM fedora:42
 
 # Install system dependencies
 RUN dnf -y install \
+    centpkg \
     python3 \
     python3-pip \
     python3-redis \
@@ -11,7 +12,8 @@ RUN dnf -y install \
     rpmlint \
     rpmdevtools \
     rpmbuild \
-    spectool
+    spectool \
+    && dnf -y clean all
 
 COPY beeai-gemini.patch /tmp
 
