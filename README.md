@@ -8,10 +8,10 @@ In this workflows we are using [MCP server for Atlassian tools](https://github.c
 Secrets such as tokens are managed in the form of environment files.  The templates for those files can be found in the `./templates` directory.  To configure the deployment, run `make config` first to copy the files to the `.secrets` directory where you can manually edit the files to add your tokens and more. This step also sets up a .env file in the toplevel directory.
 
 
- `GOOGLE_API_KEY`: take it from Google Cloud -> API & Services -> Credentials -> API Keys -> show key)
-`JIRA_PERSONAL_TOKEN`: create PATs in your Jira/Confluence profile settings - usually under "Personal Access Tokens"
-`GITLAB_TOKEN` with read permissions (read_user, read_repository, read_api).  Note that some recipes require write access to Gitlab: use it at your own risk.
-`TESTING_FARM_API_TOKEN`: required and can be generated from https://testing-farm.io/tokens/.
+- `GOOGLE_API_KEY`: take it from Google Cloud -> API & Services -> Credentials -> API Keys -> show key)
+- `JIRA_PERSONAL_TOKEN`: create PATs in your Jira/Confluence profile settings - usually under "Personal Access Tokens"
+- `GITLAB_TOKEN` with read permissions (read_user, read_repository, read_api). Forking and writing to a repository requires the `write_api` and `write_repository` scope. Please be aware that granting any write access to an agent creates a risk of data loss and should only be done in a test environment. However, you can avoid writing to the repository by using [dry run](beeai/README.md#dry-run-mode) mode.
+- `TESTING_FARM_API_TOKEN`: required and can be generated from https://testing-farm.io/tokens/.
 
 If you need to change the llm provider and model, they are stored in the Goose config file: `goose-container/goose-config.yaml` (`GOOSE_PROVIDER`, `GOOSE_MODEL`)
 
