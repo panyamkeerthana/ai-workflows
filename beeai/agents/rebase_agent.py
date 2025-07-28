@@ -45,6 +45,10 @@ class InputSchema(BaseModel):
     git_email: str = Field(
         description="E-mail address of the git user", default="rhel-packaging-agent@redhat.com"
     )
+    git_repo_basepath: str = Field(
+        description="Base path for cloned git repos",
+        default=os.getenv("GIT_REPO_BASEPATH"),
+    )
 
 
 class OutputSchema(BaseModel):
@@ -137,7 +141,7 @@ class RebaseAgent(BaseAgent):
 
           3. Create a local Git repository by following these steps:
               * Create a fork of the {{ package }} package using the `fork_repository` tool.
-              * Clone the fork using git and HTTPS into the temp directory.
+              * Clone the fork using git and HTTPS into a temporary directory under {{ git_repo_basepath }}.
 
           4. Update the {{ package }} to the newer version:
               * Create a new Git branch named `automated-package-update-{{ version }}`.

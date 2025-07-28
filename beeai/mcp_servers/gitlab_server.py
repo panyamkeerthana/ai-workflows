@@ -1,5 +1,8 @@
 import os
+import subprocess
+from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlparse
 
 from fastmcp import FastMCP
 from ogr.factory import get_project
@@ -46,6 +49,26 @@ def open_merge_request(
     if not pr:
         return None
     return pr.url
+
+
+@mcp.tool
+def push_to_remote_repository(
+    repository: Annotated[str, Field(description="Repository URL")],
+    clone_path: Annotated[Path, Field(description="Absolute path to local clone of the repository")],
+    branch: Annotated[str, Field(description="Branch to push")],
+    force: Annotated[bool, Field(description="Whether to overwrite the remote ref")] = False,
+) -> bool:
+    """
+    Pushes the specified branch from a local clone to the specified remote repository.
+    Returns true on success and false on failure.
+    """
+    url = urlparse(repository)
+    token = os.getenv("GITLAB_TOKEN")
+    remote = url._replace(netloc=f"oauth2:{token}@{url.hostname}").geturl()
+    command = ["git", "push", remote, branch]
+    if force:
+        command.append("--force")
+    return subprocess.run(command, cwd=clone_path).returncode == 0
 
 
 if __name__ == "__main__":

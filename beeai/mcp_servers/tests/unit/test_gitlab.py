@@ -1,10 +1,13 @@
+import subprocess
+from pathlib import Path
+
 import pytest
 from fastmcp import FastMCP
 from flexmock import flexmock
 from mcp.types import TextContent
 from ogr.services.gitlab import GitlabService
 
-from gitlab_server import fork_repository, open_merge_request
+from gitlab_server import fork_repository, open_merge_request, push_to_remote_repository
 
 
 @pytest.mark.asyncio
@@ -35,3 +38,20 @@ async def test_open_merge_request():
     )
     [content] = result.content
     assert content.text == mr_url
+
+
+@pytest.mark.asyncio
+async def test_push_to_remote_repository():
+    repository = "https://gitlab.com/ai-bot/bash.git"
+    branch = "automated-package-update-RHEL-12345"
+    clone_path = Path("/git-repos/bash")
+    def run(cmd, **kwargs):
+        assert cmd[0:2] == ["git", "push"]
+        assert cmd[2].endswith(repository.removeprefix("https://"))
+        assert cmd[3] == branch
+        assert kwargs.get("cwd") == clone_path
+        return flexmock(returncode=0)
+    flexmock(subprocess).should_receive("run").replace_with(run)
+    result = await push_to_remote_repository.run({"repository": repository, "clone_path": clone_path, "branch": branch})
+    [content] = result.content
+    assert bool(content.text)

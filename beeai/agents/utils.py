@@ -69,7 +69,8 @@ def get_git_finalization_steps(
         Commit and push the changes:
             {git_config_steps}
             {commit_steps}
-            * Push the branch `{branch_name}` to the fork
+            * Push the branch `{branch_name}` to the fork using the `push_to_remote_repository` tool,
+              do not use `git push`
 
         Open a merge request:
             * Open a merge request against {git_url}/{package}
