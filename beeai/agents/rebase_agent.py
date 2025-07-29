@@ -174,16 +174,16 @@ class RebaseAgent(BaseAgent):
         """
 
     async def run_with_schema(self, input: TInputSchema) -> TOutputSchema:
-        async with mcp_tools(os.getenv("MCP_GITLAB_URL")) as gitlab_tools:
+        async with mcp_tools(os.getenv("MCP_GATEWAY_URL")) as gateway_tools:
             tools = self._tools.copy()
             try:
-                self._tools.extend(gitlab_tools)
+                self._tools.extend(gateway_tools)
                 return await self._run_with_schema(input)
             finally:
                 self._tools = tools
                 # disassociate removed tools from requirements
                 for requirement in self._requirements:
-                    if requirement._source_tool in gitlab_tools:
+                    if requirement._source_tool in gateway_tools:
                         requirement._source_tool = None
 
 
