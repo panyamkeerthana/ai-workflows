@@ -22,9 +22,9 @@ from beeai_framework.tools.think import ThinkTool
 from base_agent import BaseAgent, TInputSchema, TOutputSchema
 from constants import COMMIT_PREFIX, BRANCH_PREFIX
 from observability import setup_observability
-from tools import ShellCommandTool
+from tools.shell_command import ShellCommandTool
 from triage_agent import BackportData, ErrorData
-from utils import redis_client, get_git_finalization_steps
+from utils import mcp_tools, redis_client, get_git_finalization_steps
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,10 @@ class InputSchema(BaseModel):
     git_user: str = Field(description="Name of the git user", default="RHEL Packaging Agent")
     git_email: str = Field(
         description="E-mail address of the git user", default="rhel-packaging-agent@redhat.com"
+    )
+    git_repo_basepath: str = Field(
+        description="Base path for cloned git repos",
+        default=os.getenv("GIT_REPO_BASEPATH"),
     )
 
 
@@ -114,9 +118,8 @@ class BackportAgent(BaseAgent):
           2. Check if the package {{ package }} already has the fix {{ jira_issue }} applied.
 
           3. Create a local Git repository by following these steps:
-            * Check if the fork already exists for {{ gitlab_user }} as {{ gitlab_user }}/{{ package }} and if not,
-              create a fork of the {{ package }} package using the glab tool.
-            * Clone the fork using git and HTTPS into the temp directory.
+            * Create a fork of the {{ package }} package using the `fork_repository` tool.
+            * Clone the fork using git and HTTPS into a temporary directory under {{ git_repo_basepath }}.
             * Run command `centpkg sources` in the cloned repository which downloads all sources defined in the RPM specfile.
             * Create a new Git branch named `automated-package-update-{{ jira_issue }}`.
 
@@ -140,6 +143,19 @@ class BackportAgent(BaseAgent):
 
           6. {{ backport_git_steps }}
         """
+
+    async def run_with_schema(self, input: TInputSchema) -> TOutputSchema:
+        async with mcp_tools(os.getenv("MCP_GITLAB_URL")) as gitlab_tools:
+            tools = self._tools.copy()
+            try:
+                self._tools.extend(gitlab_tools)
+                return await self._run_with_schema(input)
+            finally:
+                self._tools = tools
+                # disassociate removed tools from requirements
+                for requirement in self._requirements:
+                    if requirement._source_tool in gitlab_tools:
+                        requirement._source_tool = None
 
 
 async def main() -> None:
