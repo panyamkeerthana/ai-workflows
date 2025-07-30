@@ -19,6 +19,8 @@ RUN dnf -y install \
 COPY beeai-gemini.patch /tmp
 # https://github.com/i-am-bee/beeai-framework/issues/959
 COPY beeai-gemini-malformed-function-call.patch /tmp
+# https://github.com/i-am-bee/beeai-framework/issues/906
+COPY beeai-instrumentation.patch /tmp
 
 # Install BeeAI Framework and Phoenix
 RUN pip3 install --no-cache-dir \
@@ -27,7 +29,8 @@ RUN pip3 install --no-cache-dir \
     arize-phoenix-otel \
     && cd /usr/local/lib/python3.13/site-packages \
     && patch -p2 -i /tmp/beeai-gemini.patch \
-    && patch -p2 -i /tmp/beeai-gemini-malformed-function-call.patch
+    && patch -p2 -i /tmp/beeai-gemini-malformed-function-call.patch \
+    && patch -p5 -i /tmp/beeai-instrumentation.patch
 
 # Create user
 RUN useradd -m -G wheel beeai
