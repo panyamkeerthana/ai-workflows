@@ -23,6 +23,9 @@
 .PHONY: test-reverse-dependencies
 .PHONY: triage-issue
 .PHONY: backport-fix
+.PHONY:
+.PHONY: # Development and testing
+.PHONY: check check-find-package-dependents-script
 
 ## Defaults
 COMPOSE ?= podman compose
@@ -175,6 +178,11 @@ clean:
 	$(COMPOSE) down
 	podman volume prune -f
 
+check: check-find-package-dependents-script
+
+check-find-package-dependents-script:
+	cd scripts && python tests/test-find-package-dependents.py
+
 help:
 	@echo "Available targets:"
 	@echo "  config                      - Copy config templates to .secrets/ and .env"
@@ -191,4 +199,5 @@ help:
 	@echo "  test-package                - Submit package testing request to testing farm"
 	@echo "  test-reverse-dependencies   - Test all reverse dependencies of a package"
 	@echo "  <recipe>                    - To run the recipes/<recipe>.yaml"
+	@echo "  check                       - Run all development tests"
 	@echo "  clean                       - Stop all services and clean volumes"
