@@ -50,3 +50,12 @@ class BaseAgent(RequirementAgent, ABC):
 
     async def run_with_schema(self, input: TInputSchema) -> TOutputSchema:
         return await self._run_with_schema(input)
+
+
+if os.getenv("LITELLM_DEBUG"):
+    # the following two modules call `litellm_debug(False)` on import
+    # import them explicitly now to ensure our call to `litellm_debug()` is not negated later
+    import beeai_framework.adapters.litellm.chat
+    import beeai_framework.adapters.litellm.embedding
+    from beeai_framework.adapters.litellm.utils import litellm_debug
+    litellm_debug(True)
