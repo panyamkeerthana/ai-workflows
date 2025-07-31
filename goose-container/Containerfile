@@ -94,7 +94,7 @@ RUN git config --global user.email "rhel-packaging-agent@redhat.com" \
 
 RUN cargo build --release -p goose-cli
 
-RUN git am patches/*.patch \
+RUN git am --empty=drop patches/*.patch \
  && cargo build --release -p goose-cli
 
 #
