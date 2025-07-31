@@ -16,7 +16,7 @@ jobs:
           registry_username: ${{ secrets.REGISTRY_LOGIN }}
           registry_token: ${{ secrets.REGISTRY_TOKEN }}
           dockerfile: "goose-container/Containerfile"
-          docker_context: "goose-container"
+          docker_context: "."
           image_name: "goose"
 
   build-and-push-beeai-container:
