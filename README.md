@@ -1,54 +1,155 @@
-# AI workflows, driven by Goose AI
+# AI Workflows Platform
 
-For Goose AI to be able to access Jira tickets you need an MCP Server.
-In this workflows we are using [MCP server for Atlassian tools](https://github.com/sooperset/mcp-atlassian).
+An AI automation platform that leverages multiple AI agent frameworks for Red Hat engineering workflows. This repository uses **Goose AI**, **BeeAI**, and **ADK Workflows** to provide automation for RHEL/CentOS package management, issue triage, and development workflows.
 
-## Configure
+## 🏗️ Architecture Overview
 
-Secrets such as tokens are managed in the form of environment files.  The templates for those files can be found in the `./templates` directory.  To configure the deployment, run `make config` first to copy the files to the `.secrets` directory where you can manually edit the files to add your tokens and more. This step also sets up a .env file in the toplevel directory.
+This platform consists of several integrated components:
 
+### AI Agents
+- **[Goose AI](./goose/)** - Driven by human language instructions that call out to tools backed by MCP servers and the shell
+- **[BeeAI Framework](./beeai/)** - Driven by python scripts that call out to tools backed by MCP servers
+- **[ADK Workflows](./adk-workflows/)** - Also driven by python
 
-- `GOOGLE_API_KEY`: take it from Google Cloud -> API & Services -> Credentials -> API Keys -> show key)
-- `JIRA_PERSONAL_TOKEN`: create PATs in your Jira/Confluence profile settings - usually under "Personal Access Tokens"
-- `GITLAB_TOKEN` with read permissions (read_user, read_repository, read_api). Forking and writing to a repository requires the `write_api` and `write_repository` scope. Please be aware that granting any write access to an agent creates a risk of data loss and should only be done in a test environment. However, you can avoid writing to the repository by using [dry run](beeai/README.md#dry-run-mode) mode.
-- `TESTING_FARM_API_TOKEN`: required and can be generated from https://testing-farm.io/tokens/.
+### MCP (Model Context Protocol) Servers
+- **Atlassian MCP Server** - Jira/Confluence integration for issue management
+- **Testing Farm MCP Server** - Integration with Testing Farm for running packaging tests
 
-If you need to change the llm provider and model, they are stored in the Goose config file: `goose-container/goose-config.yaml` (`GOOSE_PROVIDER`, `GOOSE_MODEL`)
+### Package Analysis Tools
+- **[Package Dependency Analyzer](./scripts/find-package-dependents.py)** - Script for finding reverse dependencies
 
-## Build
+### Automation Recipes
+- **[Goose Recipes](./goose-recipes/)** - Predefined workflows for common tasks
+- **Issue Triage** - Automated analysis and routing of RHEL issues
+- **Package Rebase** - Automated package version updates
+- **Backport Management** - Automated patch application workflows
+- **Reverse Dependency Testing** - Automated testing of select reverse dependencies based on context
 
-- `make build` This builds the goose image using an officially released goose binaries
-- `make debug-build` This builds the goose image using a rebuild of goose from git. `*.patch` in `goose-container/` are applied to the git tree before building.
-## Run Goose - interactively - with the MCP Atlassian server
+## 🚀 Quick Start
 
-To run goose interactively, don't be tempted to run `podman compose up` or similar, because input from your terminal might not be directed to the Goose container. Instead use:
+### Prerequisites
+- Podman
+- Make
+- API tokens (see Configuration section)
 
-1. `make run-goose` (Requires enabling the [Generative Language API](https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/) or another LLM provider and configuring the environment variables as described in the [configuration docs](https://block.github.io/goose/docs/guides/config-file#global-settings).)
-2. Type *List all In Progress issues at https://issues.redhat.com/projects/LD* and wait for the output.
-3. `make clean`
+### Initial Setup
+1. **Configure environment:**
+   ```bash
+   ❯ make config
+   ```
+   This copies template files to `.secrets/` for manual configuration.
 
-You can further manually run test and run the Goose recipes which are mounted into the container at `/home/goose/recipes`.
+2. **Set up API tokens:**
+   - `GOOGLE_API_KEY` - From Google Cloud Console
+   - `JIRA_PERSONAL_TOKEN` - From Jira profile settings
+   - `GITLAB_TOKEN` - With appropriate read/write permissions
+   - `TESTING_FARM_API_TOKEN` - From https://testing-farm.io/tokens/
 
-## Run local Goose recipes
+3. **Build the platform:**
+   ```bash
+   ❯ make build
+   ```
 
-The recipes are defined in `goose-recipes/`.  If you want to run `goose-recipes/<recipe>.yaml`, run the following:
+### Running Different Components
 
-1. `make <recipe>`
-2. `make clean`
-
-## Development
-
-This project uses [pre-commit](https://pre-commit.com/) hooks. To set up:
-
+#### Interactive Goose AI Session
 ```bash
-pip install pre-commit
-pre-commit install
+❯ make run-goose
 ```
 
-## Container Images
+#### BeeAI Automated Workflows
+See beeai/README.md
 
-Container images are available at the [jotnar](https://quay.io/organization/jotnar) organization on quay.io.
+#### ADK Package Automation
+See adk-workflows/README.md
 
-## Production
+#### Goose Recipe Execution
+```bash
+# Run specific automation recipes
+❯ make triage-issue
+❯ make backport-fix
+❯ make rebase-package
+❯ make test-reverse-dependencies PACKAGE=systemd CHANGE='Fix bug in hostnamed that caused avahi to crash'
+```
 
-This project is deployed in the `jotnar-prod` namespace on the Cyborg Openshift cluster. Members of `jotnar` LDAP group have admin access to it.
+## 📋 Available Workflows
+
+### Package Management
+- **Issue Triage** - Automatically analyze JIRA issues and determine resolution path
+- **Package Rebase** - Update packages to newer upstream versions
+- **Backport Fixes** - Apply specific patches to packages
+- **Dependency Analysis** - Package dependency mapping
+
+### Development Automation
+- **Repository Management** - Automated Git operations and merge requests
+- **Testing Integration** - Automated testing via Testing Farm
+- **Documentation Generation** - Automated documentation updates
+
+### Monitoring & Observability
+- **Phoenix Web Interface** - beeai agent tracing at http://localhost:6006/
+- **Redis Commander** - beeai queue monitoring at http://localhost:8081/
+
+## 🔧 Configuration
+
+### LLM Provider Configuration
+Edit `goose-container/goose-config.yaml` to configure:
+- `GOOSE_PROVIDER` - Your preferred LLM provider
+- `GOOSE_MODEL` - Specific model to use
+
+### Dry Run Mode
+Enable safe testing without actual changes:
+```bash
+❯ export DRY_RUN=true
+```
+
+## 📁 Repository Structure
+
+```
+ai-workflows/
+├── goose/                    # Goose AI agent framework
+├── beeai/                    # BeeAI framework with specialized agents
+├── adk-workflows/            # Google ADK automation workflows
+├── goose-recipes/            # Predefined automation workflows
+├── scripts/                  # Utility scripts and tools
+├── templates/                # Configuration templates
+├── goose-container/          # Container configuration for Goose
+└── compose.yaml              # Docker Compose orchestration
+```
+
+## 🤖 Agent Capabilities
+
+### BeeAI Agents
+- **Triage Agent** - Analyzes JIRA issues and routes to appropriate resolution
+- **Rebase Agent** - Automatically updates packages to newer versions
+- **Backport Agent** - Applies targeted fixes and patches
+
+### Goose AI Integration
+- Check JIRA tickets for rebase requests
+- Get details of JIRA issues
+- Analyze JIRA ticket to decide what automation (if any) is appropriate
+- Backport fix from upstream
+- Test package in testing farm
+- Test reverse dependencies of package in testing farm
+
+## 🚢 Production Deployment
+
+### Container Images
+Available at [jotnar organization on quay.io](https://quay.io/organization/jotnar)
+
+### OpenShift Deployment
+- **Namespace**: `jotnar-prod` on Cyborg OpenShift cluster
+- **Access**: Members of `jotnar` LDAP group have admin access
+- **Monitoring**: Integrated observability and logging
+
+## 📖 Documentation
+
+- [BeeAI Framework Details](./beeai/README.md)
+- [ADK Workflows Guide](./adk-workflows/README.md)
+- [Goose AI Documentation](./goose/README.md)
+- [Package Analysis Tools](./scripts/README.md)
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+
+**Merging Policy**: Prefer rebase-merging over merge commits unless preserving branch history is necessary.
