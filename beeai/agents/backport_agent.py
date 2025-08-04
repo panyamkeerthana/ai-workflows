@@ -145,7 +145,11 @@ class BackportAgent(BaseAgent):
         """
 
     async def run_with_schema(self, input: TInputSchema) -> TOutputSchema:
-        async with mcp_tools(os.getenv("MCP_GATEWAY_URL")) as gateway_tools:
+        async with mcp_tools(
+            os.getenv("MCP_GATEWAY_URL"),
+            filter=lambda t: t
+            in ("fork_repository", "open_merge_request", "push_to_remote_repository"),
+        ) as gateway_tools:
             tools = self._tools.copy()
             try:
                 self._tools.extend(gateway_tools)

@@ -84,8 +84,8 @@ class TriageAgent(BaseAgent):
             memory=UnconstrainedMemory(),
             requirements=[
                 ConditionalRequirement(ThinkTool, force_after=Tool, consecutive_allowed=False),
-                ConditionalRequirement("jira_get_issue", min_invocations=1),
-                ConditionalRequirement(RunShellCommandTool, only_after="jira_get_issue"),
+                ConditionalRequirement("get_jira_details", min_invocations=1),
+                ConditionalRequirement(RunShellCommandTool, only_after="get_jira_details"),
             ],
             middlewares=[GlobalTrajectoryMiddleware(pretty=True)],
         )
@@ -240,17 +240,17 @@ class TriageAgent(BaseAgent):
 
     async def run_with_schema(self, input: TInputSchema) -> TOutputSchema:
         async with mcp_tools(
-            os.getenv("MCP_JIRA_URL"), filter=lambda t: t == "jira_get_issue"
-        ) as jira_tools:
+            os.getenv("MCP_GATEWAY_URL"), filter=lambda t: t == "get_jira_details"
+        ) as gateway_tools:
             tools = self._tools.copy()
             try:
-                self._tools.extend(jira_tools)
+                self._tools.extend(gateway_tools)
                 return await self._run_with_schema(input)
             finally:
                 self._tools = tools
                 # disassociate removed tools from requirements
                 for requirement in self._requirements:
-                    if requirement._source_tool in jira_tools:
+                    if requirement._source_tool in gateway_tools:
                         requirement._source_tool = None
 
 
