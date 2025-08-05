@@ -16,6 +16,16 @@ from tools.specfile import (
     SetZStreamReleaseTool,
     SetZStreamReleaseToolInput,
 )
+from tools.text import (
+    CreateTool,
+    CreateToolInput,
+    ViewTool,
+    ViewToolInput,
+    InsertTool,
+    InsertToolInput,
+    StrReplaceTool,
+    StrReplaceToolInput,
+)
 
 
 @pytest.mark.parametrize(
@@ -149,3 +159,123 @@ async def test_set_zstream_release(autorelease_spec):
     result = output.result
     assert not result
     assert autorelease_spec.read_text().splitlines()[3] == "Release:        4%{?dist}.%{autorelease -n}"
+
+
+@pytest.mark.asyncio
+async def test_create(tmp_path):
+    test_file = tmp_path / "test.txt"
+    content = "Line 1\nLine 2\n"
+    tool = CreateTool()
+    output = await tool.run(input=CreateToolInput(file=test_file, content=content)).middleware(
+        GlobalTrajectoryMiddleware(pretty=True)
+    )
+    result = output.result
+    assert not result
+    assert test_file.read_text() == content
+
+
+@pytest.mark.asyncio
+async def test_view(tmp_path):
+    test_dir = tmp_path
+    test_file = test_dir / "test.txt"
+    content = "Line 1\nLine 2\nLine 3\n"
+    test_file.write_text(content)
+    tool = ViewTool()
+    output = await tool.run(input=ViewToolInput(path=test_dir)).middleware(
+        GlobalTrajectoryMiddleware(pretty=True)
+    )
+    result = output.result
+    assert result == "test.txt\n"
+    output = await tool.run(input=ViewToolInput(path=test_file)).middleware(
+        GlobalTrajectoryMiddleware(pretty=True)
+    )
+    result = output.result
+    assert result == content
+    output = await tool.run(input=ViewToolInput(path=test_file, view_range=(2, -1))).middleware(
+        GlobalTrajectoryMiddleware(pretty=True)
+    )
+    result = output.result
+    assert (
+        result
+        == dedent(
+            """
+            Line 2
+            Line 3
+            """
+        )[1:]
+    )
+    output = await tool.run(input=ViewToolInput(path=test_file, view_range=(1, 2))).middleware(
+        GlobalTrajectoryMiddleware(pretty=True)
+    )
+    result = output.result
+    assert (
+        result
+        == dedent(
+            """
+            Line 1
+            Line 2
+            """
+        )[1:]
+    )
+
+
+@pytest.mark.parametrize(
+    "line, content",
+    [
+        (
+            0,
+            dedent(
+                """
+                Inserted line
+                Line 1
+                Line 2
+                Line 3
+                """
+            )[1:],
+        ),
+        (
+            1,
+            dedent(
+                """
+                Line 1
+                Inserted line
+                Line 2
+                Line 3
+                """
+            )[1:],
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_insert(line, content, tmp_path):
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("Line 1\nLine 2\nLine 3\n")
+    tool = InsertTool()
+    output = await tool.run(
+        input=InsertToolInput(file=test_file, line=line, new_string="Inserted line")
+    ).middleware(GlobalTrajectoryMiddleware(pretty=True))
+    result = output.result
+    assert not result
+    assert test_file.read_text() == content
+
+
+@pytest.mark.asyncio
+async def test_str_replace(tmp_path):
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("Line 1\nLine 2\nLine 3\n")
+    tool = StrReplaceTool()
+    output = await tool.run(
+        input=StrReplaceToolInput(file=test_file, old_string="Line 2", new_string="LINE_2")
+    ).middleware(GlobalTrajectoryMiddleware(pretty=True))
+    result = output.result
+    assert not result
+    assert (
+        test_file.read_text()
+        == dedent(
+            """
+            Line 1
+            LINE_2
+            Line 3
+            """
+        )[1:]
+    )

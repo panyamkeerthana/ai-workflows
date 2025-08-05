@@ -1,0 +1,144 @@
+import asyncio
+from pathlib import Path
+
+from pydantic import BaseModel, Field
+
+from beeai_framework.context import RunContext
+from beeai_framework.emitter import Emitter
+from beeai_framework.tools import StringToolOutput, Tool, ToolRunOptions
+
+
+class CreateToolInput(BaseModel):
+    file: Path = Field(description="Absolute path to a file to create")
+    content: str = Field(description="Content to write to the new file")
+
+
+class CreateTool(Tool[CreateToolInput, ToolRunOptions, StringToolOutput]):
+    name = "create"
+    description = """
+    Creates a new file with the specified content.
+    Returns error message on failure.
+    """
+    input_schema = CreateToolInput
+
+    def _create_emitter(self) -> Emitter:
+        return Emitter.root().child(
+            namespace=["tool", "text", self.name],
+            creator=self,
+        )
+
+    async def _run(
+        self, tool_input: CreateToolInput, options: ToolRunOptions | None, context: RunContext
+    ) -> StringToolOutput:
+        try:
+            tool_input.file.write_text(tool_input.content)
+        except Exception as e:
+            return StringToolOutput(result=f"Failed to create file: {e}")
+        return StringToolOutput()
+
+
+class ViewToolInput(BaseModel):
+    path: Path = Field(description="Absolute path to a file or directory to view")
+    view_range: tuple[int, int] | None = Field(
+        description="""
+        Tuple of two integers specifying the start and end line numbers to view.
+        Line numbers are 1-indexed, and -1 for the end line means read to the end of the file.
+        This argument only applies when viewing files, not directories.
+        """,
+        default=None,
+    )
+
+
+class ViewTool(Tool[ViewToolInput, ToolRunOptions, StringToolOutput]):
+    name = "view"
+    description = """
+    Outputs the contents of a file or lists the contents of a directory. Can read an entire file
+    or a specific range of lines. Returns error message on failure.
+    """
+    input_schema = ViewToolInput
+
+    def _create_emitter(self) -> Emitter:
+        return Emitter.root().child(
+            namespace=["tool", "text", self.name],
+            creator=self,
+        )
+
+    async def _run(
+        self, tool_input: ViewToolInput, options: ToolRunOptions | None, context: RunContext
+    ) -> StringToolOutput:
+        try:
+            if tool_input.path.is_file():
+                content = tool_input.path.read_text()
+                if tool_input.view_range is not None:
+                    start, end = tool_input.view_range
+                    lines = content.splitlines(keepends=True)
+                    content = "".join(lines[start - 1 : None if end < 0 else end])
+                return StringToolOutput(result=content)
+            return StringToolOutput(result="\n".join(e.name for e in tool_input.path.iterdir()) + "\n")
+        except Exception as e:
+            return StringToolOutput(result=f"Failed to view path: {e}")
+
+
+class InsertToolInput(BaseModel):
+    file: Path = Field(description="Absolute path to a file to edit")
+    line: int = Field(description="Line number after which to insert the text (0 for beginning of file)")
+    new_string: str = Field(description="Text to insert")
+
+
+class InsertTool(Tool[InsertToolInput, ToolRunOptions, StringToolOutput]):
+    name = "insert"
+    description = """
+    Inserts the specified text at a specific location in a file.
+    Returns error message on failure.
+    """
+    input_schema = InsertToolInput
+
+    def _create_emitter(self) -> Emitter:
+        return Emitter.root().child(
+            namespace=["tool", "text", self.name],
+            creator=self,
+        )
+
+    async def _run(
+        self, tool_input: InsertToolInput, options: ToolRunOptions | None, context: RunContext
+    ) -> StringToolOutput:
+        try:
+            lines = tool_input.file.read_text().splitlines(keepends=True)
+            lines.insert(tool_input.line, tool_input.new_string + "\n")
+            tool_input.file.write_text("".join(lines))
+        except Exception as e:
+            return StringToolOutput(result=f"Failed to insert text: {e}")
+        return StringToolOutput()
+
+
+class StrReplaceToolInput(BaseModel):
+    file: Path = Field(description="Absolute path to a file to edit")
+    old_string: str = Field(
+        description="Text to replace (must match exactly, including whitespace and indentation)"
+    )
+    new_string: str = Field(description="New text to insert in place of the old text")
+
+
+class StrReplaceTool(Tool[StrReplaceToolInput, ToolRunOptions, StringToolOutput]):
+    name = "str_replace"
+    description = """
+    Replaces a specific string in the specified file with a new string.
+    Returns error message on failure.
+    """
+    input_schema = StrReplaceToolInput
+
+    def _create_emitter(self) -> Emitter:
+        return Emitter.root().child(
+            namespace=["tool", "text", self.name],
+            creator=self,
+        )
+
+    async def _run(
+        self, tool_input: StrReplaceToolInput, options: ToolRunOptions | None, context: RunContext
+    ) -> StringToolOutput:
+        try:
+            content = tool_input.file.read_text()
+            tool_input.file.write_text(content.replace(tool_input.old_string, tool_input.new_string))
+        except Exception as e:
+            return StringToolOutput(result=f"Failed to replace text: {e}")
+        return StringToolOutput()
