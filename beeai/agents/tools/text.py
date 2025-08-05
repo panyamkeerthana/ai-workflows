@@ -31,7 +31,7 @@ class CreateTool(Tool[CreateToolInput, ToolRunOptions, StringToolOutput]):
         self, tool_input: CreateToolInput, options: ToolRunOptions | None, context: RunContext
     ) -> StringToolOutput:
         try:
-            tool_input.file.write_text(tool_input.content)
+            await asyncio.to_thread(tool_input.file.write_text, tool_input.content)
         except Exception as e:
             return StringToolOutput(result=f"Failed to create file: {e}")
         return StringToolOutput()
@@ -68,7 +68,7 @@ class ViewTool(Tool[ViewToolInput, ToolRunOptions, StringToolOutput]):
     ) -> StringToolOutput:
         try:
             if tool_input.path.is_file():
-                content = tool_input.path.read_text()
+                content = await asyncio.to_thread(tool_input.path.read_text)
                 if tool_input.view_range is not None:
                     start, end = tool_input.view_range
                     lines = content.splitlines(keepends=True)
@@ -103,9 +103,9 @@ class InsertTool(Tool[InsertToolInput, ToolRunOptions, StringToolOutput]):
         self, tool_input: InsertToolInput, options: ToolRunOptions | None, context: RunContext
     ) -> StringToolOutput:
         try:
-            lines = tool_input.file.read_text().splitlines(keepends=True)
+            lines = (await asyncio.to_thread(tool_input.file.read_text)).splitlines(keepends=True)
             lines.insert(tool_input.line, tool_input.new_string + "\n")
-            tool_input.file.write_text("".join(lines))
+            await asyncio.to_thread(tool_input.file.write_text, "".join(lines))
         except Exception as e:
             return StringToolOutput(result=f"Failed to insert text: {e}")
         return StringToolOutput()
@@ -137,8 +137,10 @@ class StrReplaceTool(Tool[StrReplaceToolInput, ToolRunOptions, StringToolOutput]
         self, tool_input: StrReplaceToolInput, options: ToolRunOptions | None, context: RunContext
     ) -> StringToolOutput:
         try:
-            content = tool_input.file.read_text()
-            tool_input.file.write_text(content.replace(tool_input.old_string, tool_input.new_string))
+            content = await asyncio.to_thread(tool_input.file.read_text)
+            await asyncio.to_thread(
+                tool_input.file.write_text, content.replace(tool_input.old_string, tool_input.new_string)
+            )
         except Exception as e:
             return StringToolOutput(result=f"Failed to replace text: {e}")
         return StringToolOutput()
