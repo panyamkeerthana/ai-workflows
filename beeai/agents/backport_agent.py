@@ -1,7 +1,9 @@
 import asyncio
 import logging
 import os
+import subprocess
 import sys
+import time
 import traceback
 from typing import Optional
 
@@ -20,6 +22,7 @@ from beeai_framework.tools.search.duckduckgo import DuckDuckGoSearchTool
 from beeai_framework.tools.think import ThinkTool
 
 from base_agent import BaseAgent, TInputSchema, TOutputSchema
+from tools.text import CreateTool, InsertTool, StrReplaceTool, ViewTool
 from constants import COMMIT_PREFIX, BRANCH_PREFIX
 from observability import setup_observability
 from tools.commands import RunShellCommandTool
@@ -50,6 +53,10 @@ class InputSchema(BaseModel):
         description="Base path for cloned git repos",
         default=os.getenv("GIT_REPO_BASEPATH"),
     )
+    unpacked_sources: str = Field(
+        description="Path to the unpacked (using `centpkg prep`) sources",
+        default="",
+    )
 
 
 class OutputSchema(BaseModel):
@@ -63,12 +70,31 @@ class BackportAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(
             llm=ChatModel.from_name(os.getenv("CHAT_MODEL")),
-            tools=[ThinkTool(), RunShellCommandTool(), DuckDuckGoSearchTool()],
+            tools=[
+                ThinkTool(),
+                RunShellCommandTool(),
+                DuckDuckGoSearchTool(),
+                CreateTool(),
+                ViewTool(),
+                InsertTool(),
+                StrReplaceTool(),
+            ],
             memory=UnconstrainedMemory(),
             requirements=[
                 ConditionalRequirement(ThinkTool, force_after=Tool, consecutive_allowed=False),
             ],
             middlewares=[GlobalTrajectoryMiddleware(pretty=True)],
+            role="Red Hat Enterprise Linux developer",
+            instructions=[
+                "Use the `think` tool to reason through complex decisions and document your approach.",
+                "Preserve existing formatting and style conventions in RPM spec files and patch headers.",
+                "Use `rpmlint *.spec` to check for packaging issues and address any NEW errors",
+                "Ignore pre-existing rpmlint warnings unless they're related to your changes",
+                "Run `centpkg prep` to verify all patches apply cleanly during build preparation",
+                "Generate an SRPM using `centpkg srpm` command to ensure complete build readiness",
+                "Increment the 'Release' field in the .spec file following RPM packaging conventions",
+                "* IMPORTANT: Only perform changes relevant to the backport update"
+            ]
         )
 
     @property
@@ -108,41 +134,17 @@ class BackportAgent(BaseAgent):
 
     @property
     def prompt(self) -> str:
-        return """
-          You are an agent for backporting a fix for a CentOS Stream package. You will prepare the content
-          of the update and then create a commit with the changes. Create a temporary directory and always work
-          inside it. Follow exactly these steps:
-
-          1. Find the location of the {{ package }} package at {{ git_url }}. Always use the {{ dist_git_branch }} branch.
-
-          2. Check if the package {{ package }} already has the fix {{ jira_issue }} applied.
-
-          3. Create a local Git repository by following these steps:
-            * Create a fork of the {{ package }} package using the `fork_repository` tool.
-            * Clone the fork using git and HTTPS into a temporary directory under {{ git_repo_basepath }}.
-            * Run command `centpkg sources` in the cloned repository which downloads all sources defined in the RPM specfile.
-            * Create a new Git branch named `automated-package-update-{{ jira_issue }}`.
-
-          4. Update the {{ package }} with the fix:
-            * Updating the 'Release' field in the .spec file as needed (or corresponding macros), following packaging
-              documentation.
-              * Make sure the format of the .spec file remains the same.
-            * Fetch the upstream fix {{ upstream_fix }} locally and store it in the git repo as "{{ jira_issue }}.patch".
-              * Add a new "Patch:" entry in the spec file for patch "{{ jira_issue }}.patch".
-              * Verify that the patch is being applied in the "%prep" section.
-            * Creating a changelog entry, referencing the Jira issue as "Resolves: <jira_issue>" for the issue {{ jira_issue }}.
-              The changelog entry has to use the current date.
-            * IMPORTANT: Only performing changes relevant to the backport update: Do not rename variables,
-              comment out existing lines, or alter if-else branches in the .spec file.
-
-          5. Verify and adjust the changes:
-            * Use `rpmlint` to validate your .spec file changes and fix any new errors it identifies.
-            * Generate the SRPM using `rpmbuild -bs` (ensure your .spec file and source files are correctly copied
-              to the build environment as required by the command).
-            * Verify the newly added patch applies cleanly using the command `centpkg prep`.
-
-          6. {{ backport_git_steps }}
-        """
+        return (
+            "Work inside the repository cloned at \"{{ git_repo_basepath }}/{{ package }}\"\n"
+            "Download the upstream fix from {{ upstream_fix }}\n"
+            "Store the patch file as \"{{ jira_issue }}.patch\" in the repository root\n"
+            "Navigate to the directory {{ unpacked_sources }} and use `git am` "
+            "command to apply the patch {{ jira_issue }}.patch\n"
+            "Resolve all conflicts inside {{ unpacked_sources }} directory\n"
+            "Once all conflicts are resolved, run `git am --continue` to continue applying the patch\n"
+            "Update the patch {{ jira_issue }}.patch file with the new changes from {{ unpacked_sources }}\n"
+            "{{ backport_git_steps }}"
+        )
 
     async def run_with_schema(self, input: TInputSchema) -> TOutputSchema:
         async with mcp_tools(
@@ -160,6 +162,48 @@ class BackportAgent(BaseAgent):
                 for requirement in self._requirements:
                     if requirement._source_tool in gateway_tools:
                         requirement._source_tool = None
+
+
+def prepare_package(package: str, jira_issue: str, dist_git_branch: str, input_schema: InputSchema) -> str:
+    """
+    Prepare the package for backporting by cloning the dist-git repository, switching to the appropriate branch,
+    and downloading the sources.
+    Returns the path to the unpacked sources.
+    """
+    os.makedirs(input_schema.git_repo_basepath, exist_ok=True)
+    subprocess.check_call(
+        [
+            "centpkg",
+            "clone",
+            "--anonymous",
+            "--branch",
+            dist_git_branch,
+            package,
+        ],
+        cwd=input_schema.git_repo_basepath,
+    )
+    local_clone = os.path.join(input_schema.git_repo_basepath, package)
+    subprocess.check_call(
+        [
+            "git",
+            "switch",
+            "-c",
+            f"automated-package-update-{jira_issue}",
+            dist_git_branch,
+        ],
+        cwd=local_clone,
+    )
+    subprocess.check_call(["centpkg", "sources"], cwd=local_clone)
+    subprocess.check_call(["centpkg", "prep"], cwd=local_clone)
+    unpacked_sources = glob.glob(
+        os.path.join(local_clone, "*-build", f"*{package}*")
+    )
+    if len(unpacked_sources) != 1:
+        raise ValueError(
+            f"Expected exactly one unpacked source, got {unpacked_sources}"
+        )
+    unpacked_source = unpacked_sources[0]
+    return unpacked_source
 
 
 async def main() -> None:
@@ -181,7 +225,13 @@ async def main() -> None:
             jira_issue=jira_issue,
             dist_git_branch=branch,
         )
-        output = await agent.run_with_schema(input)
+        unpacked_source = prepare_package(package, jira_issue, branch, input)
+        input.unpacked_sources = unpacked_source
+        try:
+            output = await agent.run_with_schema(input)
+        except Exception:
+            logger.info(f"Sleeping, you can now debug")
+            time.sleep(999999)
         logger.info(f"Direct run completed: {output.model_dump_json(indent=4)}")
         return
 
