@@ -62,6 +62,7 @@ prompt: |
        workingdir=$(mktemp "$PWD/{{ package }}.reverse-deps-tests.XXXXXX")
        $(pwd)/scripts/find-package-dependents.py --base-url {{ baseurl }} --all --describe --max-results {{ max_results }} --source-packages --format=plain '{{ package }}' \
        --filter-command 'wget --spider -q https://gitlab.com/redhat/centos-stream/rpms/$PACKAGE/-/raw/{{ dist_git_branch }}/.fmf/version' \
+       --allow-missing \
        --log-file "$workingdir/{{ package }}-logs.txt" \
        --verbose \
        --output-file "$workingdir/{{ package }}-source-deps.txt"
