@@ -13,6 +13,8 @@ from tools.specfile import (
     AddChangelogEntryToolInput,
     BumpReleaseTool,
     BumpReleaseToolInput,
+    SetZStreamReleaseTool,
+    SetZStreamReleaseToolInput,
 )
 
 
@@ -111,3 +113,39 @@ async def test_bump_release(minimal_spec):
     result = output.result
     assert not result
     assert minimal_spec.read_text().splitlines()[3] == "Release:        3%{?dist}"
+
+
+@pytest.fixture
+def autorelease_spec(tmp_path):
+    spec = tmp_path / "test.spec"
+    spec.write_text(
+        dedent(
+            """
+            Name:           test
+            Version:        0.1
+            Release:        %autorelease
+            Summary:        Test package
+
+            License:        MIT
+
+            %description
+            Test package
+
+            %changelog
+            %autochangelog
+            """
+        )
+    )
+    return spec
+
+
+@pytest.mark.asyncio
+async def test_set_zstream_release(autorelease_spec):
+    latest_ystream_evr = "0.1-4.el10"
+    tool = SetZStreamReleaseTool()
+    output = await tool.run(
+        input=SetZStreamReleaseToolInput(spec=autorelease_spec, latest_ystream_evr=latest_ystream_evr)
+    ).middleware(GlobalTrajectoryMiddleware(pretty=True))
+    result = output.result
+    assert not result
+    assert autorelease_spec.read_text().splitlines()[3] == "Release:        4%{?dist}.%{autorelease -n}"
