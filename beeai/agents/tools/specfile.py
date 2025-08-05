@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 from specfile import Specfile
+from specfile.utils import EVR
 
 from beeai_framework.context import RunContext
 from beeai_framework.emitter import Emitter
@@ -76,4 +77,39 @@ class BumpReleaseTool(Tool[BumpReleaseToolInput, ToolRunOptions, StringToolOutpu
                 spec.bump_release()
         except Exception as e:
             return StringToolOutput(result=f"Failed to bump release: {e}")
+        return StringToolOutput()
+
+
+class SetZStreamReleaseToolInput(BaseModel):
+    spec: Path = Field(description="Absolute path to a spec file")
+    latest_ystream_evr: str = Field(description="EVR (Epoch-Version-Release) of the latest Y-Stream build")
+
+
+class SetZStreamReleaseTool(Tool[SetZStreamReleaseToolInput, ToolRunOptions, StringToolOutput]):
+    name = "set_zstream_release"
+    description = """
+    Sets the value of the `Release` field in the specified spec file to a Z-Stream release
+    based on the release of the latest Y-Stream build.
+    Returns error message on failure.
+    """
+    input_schema = SetZStreamReleaseToolInput
+
+    def _create_emitter(self) -> Emitter:
+        return Emitter.root().child(
+            namespace=["tool", "specfile", self.name],
+            creator=self,
+        )
+
+    async def _run(
+        self, tool_input: SetZStreamReleaseToolInput, options: ToolRunOptions | None, context: RunContext
+    ) -> StringToolOutput:
+        try:
+            with Specfile(tool_input.spec) as spec:
+                if not spec.has_autorelease:
+                    return StringToolOutput(result="The specified spec file doesn't use %autorelease")
+                base_release = EVR.from_string(tool_input.latest_ystream_evr).release
+                base_raw_release = base_release.rsplit(".el", maxsplit=1)[0]
+                spec.raw_release = base_raw_release + "%{?dist}.%{autorelease -n}"
+        except Exception as e:
+            return StringToolOutput(result=f"Failed to set Z-Stream release: {e}")
         return StringToolOutput()
