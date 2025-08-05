@@ -2,7 +2,7 @@
 x-beeai-agent: &beeai-agent
   depends_on:
     - mcp-atlassian
-    - mcp-gitlab
+    - mcp-gateway
     - valkey
     - phoenix
   image: beeai-agent
@@ -11,7 +11,7 @@ x-beeai-agent: &beeai-agent
     dockerfile: Containerfile
   environment:
     - MCP_JIRA_URL=http://mcp-atlassian:9000/sse
-    - MCP_GITLAB_URL=http://mcp-gitlab:8000/sse
+    - MCP_GATEWAY_URL=http://mcp-gateway:8000/sse
     - REDIS_URL=redis://valkey:6379/0
     - COLLECTOR_ENDPOINT=http://phoenix:6006/v1/traces
     - GIT_REPO_BASEPATH=/git-repos
@@ -24,18 +24,6 @@ x-beeai-agent: &beeai-agent
     - git-repos:/git-repos
   restart: unless-stopped
 
-# Base template for MCP servers
-x-mcp-server: &mcp-server
-  image: mcp-server
-  build:
-    context: .
-    dockerfile: Containerfile.mcp
-  environment:
-    - SSE_PORT=8000
-  volumes:
-    - ./mcp_servers:/home/mcp/mcp_servers:ro,z
-  restart: unless-stopped
-
 services:
   mcp-atlassian:
     image: ghcr.io/sooperset/mcp-atlassian:latest
@@ -44,14 +32,24 @@ services:
     command: ["--transport", "sse", "--port", "9000", "-vv"]
     restart: unless-stopped
 
-  mcp-gitlab:
-    <<: *mcp-server
+  mcp-gateway:
+    image: mcp-gateway
+    build:
+      context: .
+      dockerfile: Containerfile.mcp
+    environment:
+      - SSE_PORT=8000
+      - KEYTAB_FILE=/home/mcp/keytab
+      # default cache location is a keyring
+      - KRB5CCNAME=FILE:/tmp/krb5cc
     env_file:
-      - .secrets/mcp-gitlab.env
+      - .secrets/mcp-gateway.env
     volumes:
-      - ./mcp_servers:/home/mcp/mcp_servers:ro,z
+      - ./mcp_server:/home/mcp/mcp_server:ro,z
+      - .secrets/keytab:/home/mcp/keytab:ro,z
       - git-repos:/git-repos
-    command: ["python", "mcp_servers/gitlab_server.py"]
+    command: ["python", "mcp_server/gateway.py"]
+    restart: unless-stopped
 
   valkey:
     image: docker.io/valkey/valkey:8
