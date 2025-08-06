@@ -1876,6 +1876,104 @@ class TestFindPackageDependents(unittest.TestCase):
                 self.assertIn("mutter", result["libwayland-server"]["dependents"])
                 self.assertNotIn("libwayland-server", result["mutter"]["dependents"])
 
+    @patch.object(find_package_dependents, 'run_command')
+    def test_breadth_first_with_max_results_and_filtering(self, mock_run_command):
+        """Test that breadth-first traversal works correctly with max_results even when some dependents are filtered out.
+
+        This test verifies the fix for the bug where max_results was incorrectly applied to generate_direct_dependents,
+        causing performance issues due to deep traversal when filters would reject some results.
+        """
+        def mock_dnf_calls(command_args):
+            full_command = ' '.join(command_args)
+            if "libwayland-server" in full_command:
+                return {"return_code": 0, "output": "mutter\nweston\nsway\nkwin"}
+            else:
+                return {"return_code": 0, "output": ""}
+
+        mock_run_command.side_effect = mock_dnf_calls
+
+        def mock_filter_command(package_name, filter_cmd, *args, **kwargs):
+            return package_name in ["mutter", "kwin"]
+
+        with patch.object(find_package_dependents, 'run_filter_command', side_effect=mock_filter_command):
+            result = find_package_dependents.build_dependents_graph(
+                root_package="libwayland-server",
+                repository_paths=self.repositories,
+                show_source_packages=False,
+                source_cache=self.source_cache,
+                metrics=self.metrics,
+                filter_cache=self.filter_cache,
+                dependency_cache=self.dependency_cache,
+                max_results=1,  # Very small limit to test breadth-first behavior
+                keep_cycles=False,
+                verbose=False,
+                filter_command="test filter",  # Enable filtering
+                allow_missing=False
+            )
+
+            self.assertIn("libwayland-server", result)
+            root_dependents = result["libwayland-server"]["dependents"]
+
+            self.assertGreaterEqual(len(root_dependents), 1)
+
+            valid_dependents = [dep for dep in root_dependents if dep in ["mutter", "kwin"]]
+            self.assertGreaterEqual(len(valid_dependents), 1)
+
+            self.assertNotIn("sway", root_dependents)
+            self.assertNotIn("weston", root_dependents)
+
+            self.assertTrue(result["libwayland-server"]["partial"])
+
+
+    @patch.object(find_package_dependents, 'run_command')
+    def test_breadth_first_multi_level_traversal(self, mock_run_command):
+        """Test breadth-first traversal works correctly across multiple dependency levels with filtering.
+        """
+        def mock_dnf_calls(command_args):
+            full_command = ' '.join(command_args)
+            if "glibc" in full_command:
+                return {"return_code": 0, "output": "systemd\nbash\npodman\nbuildah\nkernel"}
+            elif "podman" in full_command:
+                return {"return_code": 0, "output": "cockpit-podman\ntoolbox"}
+            elif "buildah" in full_command:
+                return {"return_code": 0, "output": "container-tools\nskopeo"}
+            else:
+                return {"return_code": 0, "output": ""}
+
+        mock_run_command.side_effect = mock_dnf_calls
+
+        def mock_filter_command(package_name, filter_cmd, *args, **kwargs):
+            return package_name in ["podman", "buildah", "cockpit-podman", "toolbox", "container-tools", "skopeo"]
+
+        with patch.object(find_package_dependents, 'run_filter_command', side_effect=mock_filter_command):
+            result = find_package_dependents.build_dependents_graph(
+                root_package="glibc",
+                repository_paths=self.repositories,
+                show_source_packages=False,
+                source_cache=self.source_cache,
+                metrics=self.metrics,
+                filter_cache=self.filter_cache,
+                dependency_cache=self.dependency_cache,
+                max_results=4,
+                keep_cycles=False,
+                verbose=False,
+                filter_command="test filter",
+                allow_missing=False
+            )
+
+            self.assertIn("glibc", result)
+            self.assertIn("podman", result)
+            self.assertIn("buildah", result)
+
+            podman_children = result["podman"]["dependents"]
+            self.assertIn("cockpit-podman", podman_children)
+            self.assertIn("toolbox", podman_children)
+
+            root_dependents = result["glibc"]["dependents"]
+            self.assertNotIn("systemd", root_dependents)
+            self.assertNotIn("bash", root_dependents)
+            self.assertNotIn("kernel", root_dependents)
+
 
 def print_header():
     print("─" * 70)
