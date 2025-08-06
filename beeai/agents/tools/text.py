@@ -17,7 +17,6 @@ class CreateTool(Tool[CreateToolInput, ToolRunOptions, StringToolOutput]):
     name = "create"
     description = """
     Creates a new file with the specified content.
-    Returns error message on failure.
     """
     input_schema = CreateToolInput
 
@@ -34,7 +33,7 @@ class CreateTool(Tool[CreateToolInput, ToolRunOptions, StringToolOutput]):
             await asyncio.to_thread(tool_input.file.write_text, tool_input.content)
         except Exception as e:
             return StringToolOutput(result=f"Failed to create file: {e}")
-        return StringToolOutput()
+        return StringToolOutput(result=f"Successfully created {tool_input.file} with the specified text")
 
 
 class ViewToolInput(BaseModel):
@@ -60,7 +59,7 @@ class ViewTool(Tool[ViewToolInput, ToolRunOptions, StringToolOutput]):
     name = "view"
     description = """
     Outputs the contents of a file or lists the contents of a directory. Can read an entire file
-    or a specific range of lines. Returns error message on failure.
+    or a specific range of lines.
     """
     input_schema = ViewToolInput
 
@@ -96,7 +95,6 @@ class InsertTool(Tool[InsertToolInput, ToolRunOptions, StringToolOutput]):
     name = "insert"
     description = """
     Inserts the specified text at a specific location in a file.
-    Returns error message on failure.
     """
     input_schema = InsertToolInput
 
@@ -115,7 +113,7 @@ class InsertTool(Tool[InsertToolInput, ToolRunOptions, StringToolOutput]):
             await asyncio.to_thread(tool_input.file.write_text, "".join(lines))
         except Exception as e:
             return StringToolOutput(result=f"Failed to insert text: {e}")
-        return StringToolOutput()
+        return StringToolOutput(result=f"Successfully inserted the specified text into {tool_input.file}")
 
 
 class StrReplaceToolInput(BaseModel):
@@ -130,7 +128,6 @@ class StrReplaceTool(Tool[StrReplaceToolInput, ToolRunOptions, StringToolOutput]
     name = "str_replace"
     description = """
     Replaces a specific string in the specified file with a new string.
-    Returns error message on failure.
     """
     input_schema = StrReplaceToolInput
 
@@ -150,4 +147,4 @@ class StrReplaceTool(Tool[StrReplaceToolInput, ToolRunOptions, StringToolOutput]
             )
         except Exception as e:
             return StringToolOutput(result=f"Failed to replace text: {e}")
-        return StringToolOutput()
+        return StringToolOutput(result=f"Successfully replaced the specified text in {tool_input.file}")

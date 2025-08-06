@@ -53,4 +53,5 @@ def test_push_to_remote_repository():
         return flexmock(returncode=0)
 
     flexmock(subprocess).should_receive("run").replace_with(run)
-    assert push_to_remote_repository(repository=repository, clone_path=clone_path, branch=branch) is None
+    result = push_to_remote_repository(repository=repository, clone_path=clone_path, branch=branch)
+    assert result.startswith("Successfully")
