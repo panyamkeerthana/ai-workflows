@@ -104,7 +104,7 @@ async def test_add_changelog_entry(minimal_spec):
         input=AddChangelogEntryToolInput(spec=minimal_spec, content=content, author=author, email=email)
     ).middleware(GlobalTrajectoryMiddleware(pretty=True))
     result = output.result
-    assert not result
+    assert result.startswith("Successfully")
     assert minimal_spec.read_text().splitlines()[-7:-2] == [
         "%changelog",
         "* Tue Aug 05 2025 rhel-packaging-agent <rhel-packaging-agent@redhat.com> - 0.1-2",
@@ -121,7 +121,7 @@ async def test_bump_release(minimal_spec):
         GlobalTrajectoryMiddleware(pretty=True)
     )
     result = output.result
-    assert not result
+    assert result.startswith("Successfully")
     assert minimal_spec.read_text().splitlines()[3] == "Release:        3%{?dist}"
 
 
@@ -157,7 +157,7 @@ async def test_set_zstream_release(autorelease_spec):
         input=SetZStreamReleaseToolInput(spec=autorelease_spec, latest_ystream_evr=latest_ystream_evr)
     ).middleware(GlobalTrajectoryMiddleware(pretty=True))
     result = output.result
-    assert not result
+    assert result.startswith("Successfully")
     assert autorelease_spec.read_text().splitlines()[3] == "Release:        4%{?dist}.%{autorelease -n}"
 
 
@@ -170,7 +170,7 @@ async def test_create(tmp_path):
         GlobalTrajectoryMiddleware(pretty=True)
     )
     result = output.result
-    assert not result
+    assert result.startswith("Successfully")
     assert test_file.read_text() == content
 
 
@@ -255,7 +255,7 @@ async def test_insert(line, content, tmp_path):
         input=InsertToolInput(file=test_file, line=line, new_string="Inserted line")
     ).middleware(GlobalTrajectoryMiddleware(pretty=True))
     result = output.result
-    assert not result
+    assert result.startswith("Successfully")
     assert test_file.read_text() == content
 
 
@@ -268,7 +268,7 @@ async def test_str_replace(tmp_path):
         input=StrReplaceToolInput(file=test_file, old_string="Line 2", new_string="LINE_2")
     ).middleware(GlobalTrajectoryMiddleware(pretty=True))
     result = output.result
-    assert not result
+    assert result.startswith("Successfully")
     assert (
         test_file.read_text()
         == dedent(

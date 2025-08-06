@@ -51,10 +51,9 @@ def push_to_remote_repository(
     clone_path: Annotated[Path, Field(description="Absolute path to local clone of the repository")],
     branch: Annotated[str, Field(description="Branch to push")],
     force: Annotated[bool, Field(description="Whether to overwrite the remote ref")] = False,
-) -> str | None:
+) -> str:
     """
     Pushes the specified branch from a local clone to the specified remote repository.
-    Returns error message on failure.
     """
     url = urlparse(repository)
     token = os.getenv("GITLAB_TOKEN")
@@ -64,3 +63,4 @@ def push_to_remote_repository(
         command.append("--force")
     if subprocess.run(command, cwd=clone_path).returncode != 0:
         return "Failed to push to the specified repository"
+    return f"Successfully pushed the specified branch to {repository}"

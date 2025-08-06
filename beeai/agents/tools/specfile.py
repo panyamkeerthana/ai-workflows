@@ -30,7 +30,7 @@ class AddChangelogEntryToolInput(BaseModel):
 class AddChangelogEntryTool(Tool[AddChangelogEntryToolInput, ToolRunOptions, StringToolOutput]):
     name = "add_changelog_entry"
     description = """
-    Adds a new changelog entry to the specified spec file. Returns error message on failure.
+    Adds a new changelog entry to the specified spec file.
     """
     input_schema = AddChangelogEntryToolInput
 
@@ -48,7 +48,7 @@ class AddChangelogEntryTool(Tool[AddChangelogEntryToolInput, ToolRunOptions, Str
                 spec.add_changelog_entry(tool_input.content, author=tool_input.author, email=tool_input.email)
         except Exception as e:
             return StringToolOutput(result=f"Failed to add changelog entry: {e}")
-        return StringToolOutput()
+        return StringToolOutput(result=f"Successfully added a new changelog entry to {tool_input.spec}")
 
 
 class BumpReleaseToolInput(BaseModel):
@@ -59,7 +59,6 @@ class BumpReleaseTool(Tool[BumpReleaseToolInput, ToolRunOptions, StringToolOutpu
     name = "bump_release"
     description = """
     Bumps (increments) the value of `Release` in the specified spec file.
-    Returns error message on failure.
     """
     input_schema = BumpReleaseToolInput
 
@@ -77,7 +76,7 @@ class BumpReleaseTool(Tool[BumpReleaseToolInput, ToolRunOptions, StringToolOutpu
                 spec.bump_release()
         except Exception as e:
             return StringToolOutput(result=f"Failed to bump release: {e}")
-        return StringToolOutput()
+        return StringToolOutput(result=f"Successfully bumped release in {tool_input.spec}")
 
 
 class SetZStreamReleaseToolInput(BaseModel):
@@ -90,7 +89,6 @@ class SetZStreamReleaseTool(Tool[SetZStreamReleaseToolInput, ToolRunOptions, Str
     description = """
     Sets the value of the `Release` field in the specified spec file to a Z-Stream release
     based on the release of the latest Y-Stream build.
-    Returns error message on failure.
     """
     input_schema = SetZStreamReleaseToolInput
 
@@ -112,4 +110,4 @@ class SetZStreamReleaseTool(Tool[SetZStreamReleaseToolInput, ToolRunOptions, Str
                 spec.raw_release = base_raw_release + "%{?dist}.%{autorelease -n}"
         except Exception as e:
             return StringToolOutput(result=f"Failed to set Z-Stream release: {e}")
-        return StringToolOutput()
+        return StringToolOutput(result=f"Successfully set Z-Stream release in {tool_input.spec}")

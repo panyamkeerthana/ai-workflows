@@ -57,7 +57,8 @@ def test_set_jira_fields(args, fields):
         return flexmock(raise_for_status=lambda: None)
 
     flexmock(requests).should_receive("put").replace_with(put)
-    assert set_jira_fields(issue_key, **args) is None
+    result = set_jira_fields(issue_key, **args)
+    assert result.startswith("Successfully")
 
 
 def test_add_jira_comment():
@@ -70,4 +71,5 @@ def test_add_jira_comment():
         return flexmock(raise_for_status=lambda: None)
 
     flexmock(requests).should_receive("post").replace_with(post)
-    assert add_jira_comment(issue_key, comment) is None
+    result = add_jira_comment(issue_key, comment)
+    assert result.startswith("Successfully")

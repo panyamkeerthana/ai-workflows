@@ -17,7 +17,8 @@ def test_download_sources(internal):
         return flexmock(returncode=0)
 
     flexmock(subprocess).should_receive("run").replace_with(run)
-    assert download_sources(dist_git_path=".", internal=internal) is None
+    result =  download_sources(dist_git_path=".", internal=internal)
+    assert result.startswith("Successfully")
 
 
 @pytest.mark.parametrize(
@@ -32,4 +33,5 @@ def test_upload_sources(internal):
 
     flexmock(lookaside_tools).should_receive("init_kerberos_ticket").and_return(True).once()
     flexmock(subprocess).should_receive("run").replace_with(run)
-    assert upload_sources(dist_git_path=".", new_sources=new_sources, internal=internal) is None
+    result =  upload_sources(dist_git_path=".", new_sources=new_sources, internal=internal)
+    assert result.startswith("Successfully")

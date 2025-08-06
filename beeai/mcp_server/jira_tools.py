@@ -64,10 +64,9 @@ def set_jira_fields(
     preliminary_testing: Annotated[
         PreliminaryTesting | None, Field(description="Preliminary Testing value")
     ] = None,
-) -> str | None:
+) -> str:
     """
     Updates the specified Jira issue, setting the specified fields (if provided).
-    Returns error message on failure.
     """
     fields = {}
     if fix_versions is not None:
@@ -77,7 +76,7 @@ def set_jira_fields(
     if preliminary_testing is not None:
         fields["customfield_12321540"] = {"value": preliminary_testing.value}
     if not fields:
-        return
+        return "No fields to update have been specified, not doing anything"
     try:
         response = requests.put(
             urljoin(os.getenv("JIRA_URL"), f"rest/api/2/issue/{issue_key}"),
@@ -87,14 +86,15 @@ def set_jira_fields(
         response.raise_for_status()
     except requests.RequestException as e:
         return f"Failed to set the specified fields: {e}"
+    return f"Successfully set the specified fields in {issue_key}"
 
 
 def add_jira_comment(
     issue_key: Annotated[str, Field(description="Jira issue key (e.g. RHEL-12345)")],
     comment: Annotated[str, Field(description="Comment text to add")],
-) -> str | None:
+) -> str:
     """
-    Adds a comment to the specified Jira issue. Returns error message on failure.
+    Adds a comment to the specified Jira issue.
     """
     try:
         response = requests.post(
@@ -105,3 +105,4 @@ def add_jira_comment(
         response.raise_for_status()
     except requests.RequestException as e:
         return f"Failed to add the specified comment: {e}"
+    return f"Successfully added the specified comment to {issue_key}"
