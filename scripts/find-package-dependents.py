@@ -997,7 +997,7 @@ def build_dependents_graph(
         any_filtered_dependents = False
         for dependent in generate_direct_dependents(
                 package, repository_paths, metrics, dependency_cache, verbose,
-                cache_only=result_limit_hit, max_results=max_results
+                cache_only=result_limit_hit
         ):
             if show_source_packages:
                 dependent = query_source_package(
