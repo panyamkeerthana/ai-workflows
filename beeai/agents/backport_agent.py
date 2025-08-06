@@ -115,8 +115,6 @@ class BackportAgent(BaseAgent):
                 commit_title=f"{COMMIT_PREFIX} backport {input_data.jira_issue}",
                 files_to_commit=f"*.spec and {input_data.jira_issue}.patch",
                 branch_name=f"{BRANCH_PREFIX}-{input_data.jira_issue}",
-                git_user=input_data.git_user,
-                git_email=input_data.git_email,
                 git_url=input_data.git_url,
                 dist_git_branch=input_data.dist_git_branch,
             )
