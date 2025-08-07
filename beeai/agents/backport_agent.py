@@ -22,7 +22,9 @@ from beeai_framework.tools.search.duckduckgo import DuckDuckGoSearchTool
 from beeai_framework.tools.think import ThinkTool
 
 from base_agent import BaseAgent, TInputSchema, TOutputSchema
+from tools.specfile import AddChangelogEntryTool, BumpReleaseTool
 from tools.text import CreateTool, InsertTool, StrReplaceTool, ViewTool
+from tools.wicked_git import GitPatchCreationTool
 from constants import COMMIT_PREFIX, BRANCH_PREFIX
 from observability import setup_observability
 from tools.commands import RunShellCommandTool
@@ -78,6 +80,9 @@ class BackportAgent(BaseAgent):
                 ViewTool(),
                 InsertTool(),
                 StrReplaceTool(),
+                GitPatchCreationTool(),
+                BumpReleaseTool(),
+                AddChangelogEntryTool(),
             ],
             memory=UnconstrainedMemory(),
             requirements=[
@@ -92,7 +97,10 @@ class BackportAgent(BaseAgent):
                 "Ignore pre-existing rpmlint warnings unless they're related to your changes",
                 "Run `centpkg prep` to verify all patches apply cleanly during build preparation",
                 "Generate an SRPM using `centpkg srpm` command to ensure complete build readiness",
-                "Increment the 'Release' field in the .spec file following RPM packaging conventions",
+                "Increment the 'Release' field in the .spec file following RPM packaging conventions "
+                "using the `bump_release` tool",
+                "Add a new changelog entry to the .spec file using the `add_changelog_entry` tool using name "
+                "\"RHEL Packaging Agent <jotnar@redhat.com>\"",
                 "* IMPORTANT: Only perform changes relevant to the backport update"
             ]
         )
@@ -136,11 +144,13 @@ class BackportAgent(BaseAgent):
             "Work inside the repository cloned at \"{{ git_repo_basepath }}/{{ package }}\"\n"
             "Download the upstream fix from {{ upstream_fix }}\n"
             "Store the patch file as \"{{ jira_issue }}.patch\" in the repository root\n"
-            "Navigate to the directory {{ unpacked_sources }} and use `git am` "
+            "Navigate to the directory {{ unpacked_sources }} and use `git am --reject` "
             "command to apply the patch {{ jira_issue }}.patch\n"
-            "Resolve all conflicts inside {{ unpacked_sources }} directory\n"
-            "Once all conflicts are resolved, run `git am --continue` to continue applying the patch\n"
-            "Update the patch {{ jira_issue }}.patch file with the new changes from {{ unpacked_sources }}\n"
+            "Resolve all conflicts inside {{ unpacked_sources }} directory and "
+            "leave the repository in a dirty state\n"
+            "Delete all *.rej files\n"
+            "DO **NOT** RUN COMMAND `git am --continue`\n"
+            "Once you resolve all conflicts, use tool git_patch_create to create a patch file\n"
             "{{ backport_git_steps }}"
         )
 
