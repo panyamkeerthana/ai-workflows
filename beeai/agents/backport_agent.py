@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+from shutil import rmtree
 import subprocess
 import sys
 import time
@@ -172,7 +173,8 @@ class BackportAgent(BaseAgent):
                         requirement._source_tool = None
 
 
-def prepare_package(package: str, jira_issue: str, dist_git_branch: str, input_schema: InputSchema) -> str:
+def prepare_package(package: str, jira_issue: str, dist_git_branch: str,
+                    input_schema: InputSchema) -> tuple[str, str]:
     """
     Prepare the package for backporting by cloning the dist-git repository, switching to the appropriate branch,
     and downloading the sources.
@@ -210,15 +212,14 @@ def prepare_package(package: str, jira_issue: str, dist_git_branch: str, input_s
         raise ValueError(
             f"Expected exactly one unpacked source, got {unpacked_sources}"
         )
-    unpacked_source = unpacked_sources[0]
-    return unpacked_source
-
+    return unpacked_sources[0], local_clone
 
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     setup_observability(os.getenv("COLLECTOR_ENDPOINT"))
     agent = BackportAgent()
+    dry_run = os.getenv("DRY_RUN", "False").lower() == "true"
 
     if (
         (package := os.getenv("PACKAGE", None))
@@ -233,13 +234,15 @@ async def main() -> None:
             jira_issue=jira_issue,
             dist_git_branch=branch,
         )
-        unpacked_source = prepare_package(package, jira_issue, branch, input)
-        input.unpacked_sources = unpacked_source
+        input.unpacked_sources, local_clone = prepare_package(package, jira_issue, branch, input)
         try:
             output = await agent.run_with_schema(input)
-        except Exception:
-            logger.info(f"Sleeping, you can now debug")
-            time.sleep(999999)
+        finally:
+            if not dry_run:
+                logger.info(f"Removing {local_clone}")
+                rmtree(local_clone)
+            else:
+                logger.info(f"DRY RUN: Not removing {local_clone}")
         logger.info(f"Direct run completed: {output.model_dump_json(indent=4)}")
         return
 
@@ -273,6 +276,8 @@ async def main() -> None:
                 jira_issue=backport_data.jira_issue,
                 dist_git_branch=backport_data.branch,
             )
+            input.unpacked_sources, local_clone = prepare_package(backport_data.package,
+                backport_data.jira_issue, backport_data.branch, input)
 
             async def retry(task, error):
                 task.attempts += 1
@@ -296,7 +301,9 @@ async def main() -> None:
                 await retry(
                     task, ErrorData(details=error, jira_issue=input.jira_issue).model_dump_json()
                 )
+                rmtree(local_clone)
             else:
+                rmtree(local_clone)
                 if output.success:
                     logger.info(f"Backport successful for {backport_data.jira_issue}, "
                               f"adding to completed list")
