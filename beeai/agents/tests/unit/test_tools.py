@@ -1,4 +1,5 @@
 import datetime
+import subprocess
 from textwrap import dedent
 
 import pytest
@@ -7,6 +8,7 @@ from specfile import specfile
 
 from beeai_framework.middleware.trajectory import GlobalTrajectoryMiddleware
 
+from tools.wicked_git import GitPatchCreationTool, GitPatchCreationToolInput
 from tools.commands import RunShellCommandTool, RunShellCommandToolInput
 from tools.specfile import (
     AddChangelogEntryTool,
@@ -279,3 +281,70 @@ async def test_str_replace(tmp_path):
             """
         )[1:]
     )
+
+@pytest.mark.asyncio
+async def test_git_patch_creation_tool_nonexistent_repo(tmp_path):
+    # This test checks the error message for a non-existent repo path
+    repo_path = tmp_path / "not_a_repo"
+    patch_file_path = tmp_path / "patch.patch"
+    tool = GitPatchCreationTool()
+    output = await tool.run(
+        input=GitPatchCreationToolInput(
+            repository_path=str(repo_path),
+            patch_file_path=str(patch_file_path),
+        )
+    ).middleware(GlobalTrajectoryMiddleware(pretty=True))
+    result = output.result
+    assert "ERROR: Repository path does not exist" in result
+
+@pytest.fixture
+def git_repo(tmp_path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    subprocess.run(["git", "init"], cwd=repo_path, check=True)
+    # Create a file and commit it
+    file_path = repo_path / "file.txt"
+    file_path.write_text("Line 1\n")
+    subprocess.run(["git", "add", "file.txt"], cwd=repo_path, check=True)
+    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_path, check=True)
+    file_path.write_text("Line1\nLine 2\n")
+    subprocess.run(["git", "add", "file.txt"], cwd=repo_path, check=True)
+    subprocess.run(["git", "commit", "-m", "Initial commit2"], cwd=repo_path, check=True)
+    subprocess.run(["git", "branch", "line-2"], cwd=repo_path, check=True)
+    return repo_path
+
+@pytest.mark.asyncio
+async def test_git_patch_creation_tool_success(git_repo, tmp_path):
+    # Simulate a git-am session by creating a new commit and then using format-patch
+    # Create a new file and stage it
+    subprocess.run(["git", "reset", "--hard", "HEAD~1"], cwd=git_repo, check=True)
+    new_file = git_repo / "file.txt"
+    new_file.write_text("Line 1\nLine 3\n")
+    subprocess.run(["git", "add", "file.txt"], cwd=git_repo, check=True)
+    subprocess.run(["git", "commit", "-m", "Add line 3"], cwd=git_repo, check=True)
+
+    patch_file = tmp_path / "patch.patch"
+    subprocess.run(["git", "format-patch", "-1", "HEAD", "--stdout"], cwd=git_repo, check=True, stdout=patch_file.open("w"))
+
+    subprocess.run(["git", "switch", "line-2"], cwd=git_repo, check=True)
+
+    # Now apply the patch with git am
+    # This will fail with a merge conflict, but we don't care about that
+    subprocess.run(["git", "am", str(patch_file)], cwd=git_repo)
+
+    new_file.write_text("Line 1\nLine 2\nLine 3\n")
+
+    # Now use the tool to create a patch file from the repo
+    tool = GitPatchCreationTool()
+    output_patch = tmp_path / "output.patch"
+    output = await tool.run(
+        input=GitPatchCreationToolInput(
+            repository_path=str(git_repo),
+            patch_file_path=str(output_patch),
+        )
+    ).middleware(GlobalTrajectoryMiddleware(pretty=True))
+    result = output.result
+    assert "Successfully created a patch file" in result
+    assert output_patch.exists()
+    # The patch file should contain the commit message "Add line 3"
+    assert "Add line 3" in output_patch.read_text()

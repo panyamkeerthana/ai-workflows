@@ -38,8 +38,6 @@ def get_git_finalization_steps(
     commit_title: str,
     files_to_commit: str,
     branch_name: str,
-    git_user: str = "RHEL Packaging Agent",
-    git_email: str = "rhel-packaging-agent@redhat.com",
     git_url: str = "https://gitlab.com/redhat/centos-stream/rpms",
     dist_git_branch: str = "c9s",
 ) -> str:
@@ -47,9 +45,6 @@ def get_git_finalization_steps(
     dry_run = os.getenv("DRY_RUN", "False").lower() == "true"
 
     # Common commit steps
-    git_config_steps = f"""* Configure git user: `git config user.name "{git_user}"`
-            * Configure git email: `git config user.email "{git_email}"`"""
-
     commit_steps = f"""* Add files to commit: {files_to_commit}
             * Create commit with title: "{commit_title}"
             * Include JIRA reference: "Resolves: {jira_issue}" in commit body"""
@@ -59,7 +54,6 @@ def get_git_finalization_steps(
         **DRY RUN MODE**: Commit changes locally only
 
         Commit the changes:
-            {git_config_steps}
             {commit_steps}
 
         **Important**: In dry-run mode, only commit locally. Do not push or create merge requests.
@@ -67,7 +61,6 @@ def get_git_finalization_steps(
     else:
         return f"""
         Commit and push the changes:
-            {git_config_steps}
             {commit_steps}
             * Push the branch `{branch_name}` to the fork using the `push_to_remote_repository` tool,
               do not use `git push`
