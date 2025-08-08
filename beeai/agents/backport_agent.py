@@ -2,9 +2,9 @@ import asyncio
 import logging
 import os
 from shutil import rmtree
+from pathlib import Path
 import subprocess
 import sys
-import time
 import traceback
 from typing import Optional
 
@@ -174,13 +174,14 @@ class BackportAgent(BaseAgent):
 
 
 def prepare_package(package: str, jira_issue: str, dist_git_branch: str,
-                    input_schema: InputSchema) -> tuple[str, str]:
+                    input_schema: InputSchema) -> tuple[Path, Path]:
     """
     Prepare the package for backporting by cloning the dist-git repository, switching to the appropriate branch,
     and downloading the sources.
     Returns the path to the unpacked sources.
     """
-    os.makedirs(input_schema.git_repo_basepath, exist_ok=True)
+    git_repo = Path(input_schema.git_repo_basepath)
+    git_repo.mkdir(parents=True, exist_ok=True)
     subprocess.check_call(
         [
             "centpkg",
@@ -190,9 +191,9 @@ def prepare_package(package: str, jira_issue: str, dist_git_branch: str,
             dist_git_branch,
             package,
         ],
-        cwd=input_schema.git_repo_basepath,
+        cwd=git_repo,
     )
-    local_clone = os.path.join(input_schema.git_repo_basepath, package)
+    local_clone = git_repo / package
     subprocess.check_call(
         [
             "git",
@@ -205,9 +206,7 @@ def prepare_package(package: str, jira_issue: str, dist_git_branch: str,
     )
     subprocess.check_call(["centpkg", "sources"], cwd=local_clone)
     subprocess.check_call(["centpkg", "prep"], cwd=local_clone)
-    unpacked_sources = glob.glob(
-        os.path.join(local_clone, "*-build", f"*{package}*")
-    )
+    unpacked_sources = list(local_clone.glob(f"*-build/*{package}*"))
     if len(unpacked_sources) != 1:
         raise ValueError(
             f"Expected exactly one unpacked source, got {unpacked_sources}"
@@ -234,7 +233,8 @@ async def main() -> None:
             jira_issue=jira_issue,
             dist_git_branch=branch,
         )
-        input.unpacked_sources, local_clone = prepare_package(package, jira_issue, branch, input)
+        unpacked_sources, local_clone = prepare_package(package, jira_issue, branch, input)
+        input.unpacked_sources = str(unpacked_sources)
         try:
             output = await agent.run_with_schema(input)
         finally:
