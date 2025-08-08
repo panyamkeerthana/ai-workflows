@@ -1,7 +1,8 @@
-import asyncio
 from pathlib import Path
 
 from pydantic import BaseModel, Field
+
+from tools.utils import run_command
 
 from beeai_framework.context import RunContext
 from beeai_framework.emitter import Emitter
@@ -12,23 +13,6 @@ class GitPatchCreationToolInput(BaseModel):
     repository_path: str = Field(description="Absolute path to the git repository")
     patch_file_path: str = Field(description="Absolute path where the patch file should be saved")
 
-
-async def run_command(cmd: list[str], cwd: Path) -> dict[str, str | int]:
-    proc = await asyncio.create_subprocess_exec(
-        cmd[0],
-        *cmd[1:],
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        cwd=cwd,
-    )
-
-    stdout, stderr = await proc.communicate()
-
-    return {
-        "exit_code": proc.returncode,
-        "stdout": stdout.decode() if stdout else None,
-        "stderr": stderr.decode() if stderr else None,
-    }
 
 class GitPatchCreationTool(Tool[GitPatchCreationToolInput, ToolRunOptions, StringToolOutput]):
     name = "git_patch_create"
