@@ -70,6 +70,8 @@ def render_prompt(input: InputSchema) -> str:
         'Work inside the repository cloned at "{{ git_repo_basepath }}/{{ package }}"\n'
         "Download the upstream fix from {{ upstream_fix }}\n"
         'Store the patch file as "{{ jira_issue }}.patch" in the repository root\n'
+        "If directory {{ unpacked_sources }} is not a git repository, run `git init` in it "
+        "and create an initial commit\n"
         "Navigate to the directory {{ unpacked_sources }} and use `git am --reject` "
         "command to apply the patch {{ jira_issue }}.patch\n"
         "Resolve all conflicts inside {{ unpacked_sources }} directory and "
