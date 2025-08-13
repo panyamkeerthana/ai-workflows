@@ -92,3 +92,60 @@ class GitPatchCreationTool(Tool[GitPatchCreationToolInput, ToolRunOptions, Strin
         except Exception as e:
             # we absolutely need to do this otherwise the error won't appear anywhere
             return StringToolOutput(result=f"ERROR: {e}")
+
+
+class GitLogSearchToolInput(BaseModel):
+    repository_path: str = Field(description="Absolute path to the git repository")
+    cve_id: str = Field(description="CVE ID to look for in git history")
+    jira_issue: str = Field(description="Jira issue to look for in git history")
+
+
+class GitLogSearchTool(Tool[GitLogSearchToolInput, ToolRunOptions, StringToolOutput]):
+    name = "git_log_search"
+    description = """
+    Searches the git history for a reference to either the provided cve_id or jira_issue.
+    Returns the commit hash and the commit message.
+    """
+    input_schema = GitLogSearchToolInput
+
+    def _create_emitter(self) -> Emitter:
+        return Emitter.root().child(
+            namespace=["tool", "git", self.name],
+            creator=self,
+        )
+
+    async def _run(
+        self, tool_input: GitLogSearchToolInput, options: ToolRunOptions | None, context: RunContext
+    ) -> StringToolOutput:
+        repo_path = Path(tool_input.repository_path)
+        if not repo_path.exists():
+            return StringToolOutput(result=f"ERROR: Repository path does not exist: {repo_path}")
+
+        if not (repo_path / ".git").exists():
+            return StringToolOutput(result=f"ERROR: Not a git repository: {repo_path}")
+        search = tool_input.cve_id or tool_input.jira_issue
+        if not search:
+            return StringToolOutput(
+                result="ERROR: No search string provided, jira_issue or cve_id is required")
+
+        cmd = [
+            "git",
+            "log",
+            "--no-merges",
+            f"--grep={search}",
+            "-n", "1",
+            f"--pretty=%s %H",
+        ]
+
+        result = await run_command(cmd, cwd=repo_path)
+        if result["exit_code"] != 0:
+            return StringToolOutput(result=f"ERROR: Git command failed: {result['stderr']}")
+
+        output = (result["stdout"] or "").strip()
+        if not output:
+            return StringToolOutput(result=f"No matches found for '{search}'")
+
+        lines = output.splitlines()
+        header = f"Found {len(lines)} matching commit(s) for '{search}'"
+        # We do not return the output because it could confuse the agent
+        return StringToolOutput(result=header)
