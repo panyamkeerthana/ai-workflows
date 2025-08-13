@@ -40,14 +40,6 @@ class InputSchema(BaseModel):
     upstream_fix: str = Field(description="Link to an upstream fix for the issue")
     jira_issue: str = Field(description="Jira issue to reference as resolved")
     dist_git_branch: str = Field(description="Git branch in dist-git to be updated")
-    gitlab_user: str = Field(
-        description="Name of the GitLab user",
-        default=os.getenv("GITLAB_USER", "rhel-packaging-agent"),
-    )
-    git_url: str = Field(
-        description="URL of the git repository",
-        default="https://gitlab.com/redhat/centos-stream/rpms",
-    )
     git_repo_basepath: str = Field(
         description="Base path for cloned git repos",
         default=os.getenv("GIT_REPO_BASEPATH"),
