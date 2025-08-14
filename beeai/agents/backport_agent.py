@@ -252,9 +252,10 @@ async def main() -> None:
                     dist_git_branch=backport_data.branch,
                     cve_id=backport_data.cve_id,
                 )
-                input.unpacked_sources, local_clone = prepare_package(
+                unpacked_sources, local_clone = prepare_package(
                     backport_data.package, backport_data.jira_issue, backport_data.branch, input
                 )
+                input.unpacked_sources = str(unpacked_sources)
 
                 async def retry(task, error):
                     task.attempts += 1
