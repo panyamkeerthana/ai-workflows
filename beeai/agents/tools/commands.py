@@ -7,7 +7,7 @@ from beeai_framework.context import RunContext
 from beeai_framework.emitter import Emitter
 from beeai_framework.tools import JSONToolOutput, Tool, ToolRunOptions
 
-from tools.utils import run_command
+from utils import run_subprocess
 
 
 class RunShellCommandToolInput(BaseModel):
@@ -41,6 +41,10 @@ class RunShellCommandTool(Tool[RunShellCommandToolInput, ToolRunOptions, RunShel
     async def _run(
         self, tool_input: RunShellCommandToolInput, options: ToolRunOptions | None, context: RunContext
     ) -> RunShellCommandToolOutput:
-        result = await run_command(tool_input.command, subprocess_function=asyncio.create_subprocess_shell)
-
+        exit_code, stdout, stderr = await run_subprocess(tool_input.command, shell=True)
+        result = {
+            "exit_code": exit_code,
+            "stdout": stdout,
+            "stderr": stderr,
+        }
         return RunShellCommandToolOutput(RunShellCommandToolResult.model_validate(result))

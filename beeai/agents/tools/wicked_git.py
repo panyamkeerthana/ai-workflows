@@ -2,11 +2,11 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from tools.utils import run_command
-
 from beeai_framework.context import RunContext
 from beeai_framework.emitter import Emitter
 from beeai_framework.tools import StringToolOutput, Tool, ToolRunOptions
+
+from utils import run_subprocess
 
 
 class GitPatchCreationToolInput(BaseModel):
@@ -45,18 +45,18 @@ class GitPatchCreationTool(Tool[GitPatchCreationToolInput, ToolRunOptions, Strin
             # list all untracked files in the repository
             rej_candidates = []
             cmd = ["git", "ls-files", "--others", "--exclude-standard"]
-            result = await run_command(cmd, cwd=tool_input_path)
-            if result["exit_code"] != 0:
-                return StringToolOutput(result=f"ERROR: Git command failed: {result['stderr']}")
-            if result["stdout"]:  # none means no untracked files
-                rej_candidates.extend(result["stdout"].splitlines())
+            exit_code, stdout, stderr = await run_subprocess(cmd, cwd=tool_input_path)
+            if exit_code != 0:
+                return StringToolOutput(result=f"ERROR: Git command failed: {stderr}")
+            if stdout:  # none means no untracked files
+                rej_candidates.extend(stdout.splitlines())
             # list staged as well since that's what the agent usually does after it resolves conflicts
             cmd = ["git", "diff", "--name-only", "--cached"]
-            result = await run_command(cmd, cwd=tool_input_path)
-            if result["exit_code"] != 0:
-                return StringToolOutput(result=f"ERROR: Git command failed: {result['stderr']}")
-            if result["stdout"]:
-                rej_candidates.extend(result["stdout"].splitlines())
+            exit_code, stdout, stderr = await run_subprocess(cmd, cwd=tool_input_path)
+            if exit_code != 0:
+                return StringToolOutput(result=f"ERROR: Git command failed: {stderr}")
+            if stdout:
+                rej_candidates.extend(stdout.splitlines())
             if rej_candidates:
                 # make sure there are no *.rej files in the repository
                 rej_files = [file for file in rej_candidates if file.endswith(".rej")]
@@ -69,15 +69,15 @@ class GitPatchCreationTool(Tool[GitPatchCreationToolInput, ToolRunOptions, Strin
             # but the backport process could create new files or change new ones
             # so let's go the naive route: git add -A
             cmd = ["git", "add", "-A"]
-            result = await run_command(cmd, cwd=tool_input_path)
-            if result["exit_code"] != 0:
-                return StringToolOutput(result=f"ERROR: Git command failed: {result['stderr']}")
+            exit_code, _, stderr = await run_subprocess(cmd, cwd=tool_input_path)
+            if exit_code != 0:
+                return StringToolOutput(result=f"ERROR: Git command failed: {stderr}")
             # continue git-am process
             cmd = ["git", "am", "--continue"]
-            result = await run_command(cmd, cwd=tool_input_path)
-            if result["exit_code"] != 0:
-                return StringToolOutput(result=f"ERROR: git-am failed: {result['stderr']},"
-                f" out={result['stdout']}")
+            exit_code, stdout, stderr = await run_subprocess(cmd, cwd=tool_input_path)
+            if exit_code != 0:
+                return StringToolOutput(result=f"ERROR: git-am failed: {stderr},"
+                f" out={stdout}")
             # good, now we should have the patch committed, so let's get the file
             cmd = [
                 "git", "format-patch",
@@ -85,9 +85,9 @@ class GitPatchCreationTool(Tool[GitPatchCreationToolInput, ToolRunOptions, Strin
                 tool_input.patch_file_path,
                 "HEAD~1..HEAD"
             ]
-            result = await run_command(cmd, cwd=tool_input_path)
-            if result["exit_code"] != 0:
-                return StringToolOutput(result=f"ERROR: git-format-patch failed: {result['stderr']}")
+            exit_code, _, stderr = await run_subprocess(cmd, cwd=tool_input_path)
+            if exit_code != 0:
+                return StringToolOutput(result=f"ERROR: git-format-patch failed: {stderr}")
             return StringToolOutput(result=f"Successfully created a patch file: {tool_input.patch_file_path}")
         except Exception as e:
             # we absolutely need to do this otherwise the error won't appear anywhere
