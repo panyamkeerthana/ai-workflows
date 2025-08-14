@@ -8,7 +8,12 @@ from specfile import specfile
 
 from beeai_framework.middleware.trajectory import GlobalTrajectoryMiddleware
 
-from tools.wicked_git import GitPatchCreationTool, GitPatchCreationToolInput
+from tools.wicked_git import (
+    GitPatchCreationTool,
+    GitPatchCreationToolInput,
+    GitLogSearchTool,
+    GitLogSearchToolInput,
+)
 from tools.commands import RunShellCommandTool, RunShellCommandToolInput
 from tools.specfile import (
     AddChangelogEntryTool,
@@ -306,10 +311,12 @@ def git_repo(tmp_path):
     file_path = repo_path / "file.txt"
     file_path.write_text("Line 1\n")
     subprocess.run(["git", "add", "file.txt"], cwd=repo_path, check=True)
-    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_path, check=True)
+    subprocess.run(["git", "commit", "-m", "Initial commit\n\nCVE-2025-12345"],
+        cwd=repo_path, check=True)
     file_path.write_text("Line1\nLine 2\n")
     subprocess.run(["git", "add", "file.txt"], cwd=repo_path, check=True)
-    subprocess.run(["git", "commit", "-m", "Initial commit2"], cwd=repo_path, check=True)
+    subprocess.run(["git", "commit", "-m", "Initial commit2\n\nResolves: RHEL-123456"],
+        cwd=repo_path, check=True)
     subprocess.run(["git", "branch", "line-2"], cwd=repo_path, check=True)
     return repo_path
 
@@ -348,3 +355,26 @@ async def test_git_patch_creation_tool_success(git_repo, tmp_path):
     assert output_patch.exists()
     # The patch file should contain the commit message "Add line 3"
     assert "Add line 3" in output_patch.read_text()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "cve_id, jira_issue, expected",
+    [
+        ("CVE-2025-12345", "", "Found 1 matching commit(s) for 'CVE-2025-12345'"),
+        ("CVE-2025-12346", "", "No matches found for 'CVE-2025-12346'"),
+        ("", "RHEL-123456", "Found 1 matching commit(s) for 'RHEL-123456'"),
+        ("", "RHEL-123457", "No matches found for 'RHEL-123457'"),
+    ]
+)
+async def test_git_log_search_tool_found(git_repo, cve_id, jira_issue, expected):
+    tool = GitLogSearchTool()
+    output = await tool.run(
+        input=GitLogSearchToolInput(
+            repository_path=str(git_repo),
+            cve_id=cve_id,
+            jira_issue=jira_issue,
+        )
+    ).middleware(GlobalTrajectoryMiddleware(pretty=True))
+    result = output.result
+    assert expected in result

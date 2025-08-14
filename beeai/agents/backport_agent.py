@@ -25,7 +25,7 @@ from beeai_framework.tools.think import ThinkTool
 
 from tools.specfile import AddChangelogEntryTool, BumpReleaseTool
 from tools.text import CreateTool, InsertTool, StrReplaceTool, ViewTool
-from tools.wicked_git import GitPatchCreationTool
+from tools.wicked_git import GitLogSearchTool, GitPatchCreationTool
 from constants import COMMIT_PREFIX, BRANCH_PREFIX
 from observability import setup_observability
 from tools.commands import RunShellCommandTool
@@ -39,15 +39,8 @@ class InputSchema(BaseModel):
     package: str = Field(description="Package to update")
     upstream_fix: str = Field(description="Link to an upstream fix for the issue")
     jira_issue: str = Field(description="Jira issue to reference as resolved")
+    cve_id: str = Field(default="", description="CVE ID if the jira issue is a CVE")
     dist_git_branch: str = Field(description="Git branch in dist-git to be updated")
-    gitlab_user: str = Field(
-        description="Name of the GitLab user",
-        default=os.getenv("GITLAB_USER", "rhel-packaging-agent"),
-    )
-    git_url: str = Field(
-        description="URL of the git repository",
-        default="https://gitlab.com/redhat/centos-stream/rpms",
-    )
     git_repo_basepath: str = Field(
         description="Base path for cloned git repos",
         default=os.getenv("GIT_REPO_BASEPATH"),
@@ -68,8 +61,12 @@ class OutputSchema(BaseModel):
 def render_prompt(input: InputSchema) -> str:
     template = (
         'Work inside the repository cloned at "{{ git_repo_basepath }}/{{ package }}"\n'
+        "Use the `git_log_search` tool to check if the jira issue ({{ jira_issue }}) or CVE ({{ cve_id }}) is already resolved.\n"
+        "If the issue or the cve are already resolved, exit the backporting process with success=True and status=\"Backport already applied\"\n"
         "Download the upstream fix from {{ upstream_fix }}\n"
         'Store the patch file as "{{ jira_issue }}.patch" in the repository root\n'
+        "If directory {{ unpacked_sources }} is not a git repository, run `git init` in it "
+        "and create an initial commit\n"
         "Navigate to the directory {{ unpacked_sources }} and use `git am --reject` "
         "command to apply the patch {{ jira_issue }}.patch\n"
         "Resolve all conflicts inside {{ unpacked_sources }} directory and "
@@ -89,7 +86,6 @@ def render_prompt(input: InputSchema) -> str:
             commit_title=f"{COMMIT_PREFIX} backport {input_data.jira_issue}",
             files_to_commit=f"*.spec and {input_data.jira_issue}.patch",
             branch_name=f"{BRANCH_PREFIX}-{input_data.jira_issue}",
-            git_url=input_data.git_url,
             dist_git_branch=input_data.dist_git_branch,
         )
 
@@ -142,6 +138,7 @@ async def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     setup_observability(os.getenv("COLLECTOR_ENDPOINT"))
+    cve_id = os.getenv("CVE_ID", "")
 
     async with mcp_tools(os.getenv("MCP_GATEWAY_URL")) as gateway_tools:
         agent = RequirementAgent(
@@ -155,6 +152,7 @@ async def main() -> None:
                 InsertTool(),
                 StrReplaceTool(),
                 GitPatchCreationTool(),
+                GitLogSearchTool(),
                 BumpReleaseTool(),
                 AddChangelogEntryTool(),
             ]
@@ -206,6 +204,7 @@ async def main() -> None:
                 upstream_fix=upstream_fix,
                 jira_issue=jira_issue,
                 dist_git_branch=branch,
+                cve_id=cve_id,
             )
             unpacked_sources, local_clone = prepare_package(package, jira_issue, branch, input)
             input.unpacked_sources = str(unpacked_sources)
@@ -251,10 +250,12 @@ async def main() -> None:
                     upstream_fix=backport_data.patch_url,
                     jira_issue=backport_data.jira_issue,
                     dist_git_branch=backport_data.branch,
+                    cve_id=backport_data.cve_id,
                 )
-                input.unpacked_sources, local_clone = prepare_package(
+                unpacked_sources, local_clone = prepare_package(
                     backport_data.package, backport_data.jira_issue, backport_data.branch, input
                 )
+                input.unpacked_sources = str(unpacked_sources)
 
                 async def retry(task, error):
                     task.attempts += 1

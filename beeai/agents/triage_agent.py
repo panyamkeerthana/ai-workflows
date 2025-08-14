@@ -53,6 +53,7 @@ class BackportData(BaseModel):
     patch_url: str = Field(description="URL or reference to the source of the fix")
     justification: str = Field(description="Clear explanation of why this patch fixes the issue")
     jira_issue: str = Field(description="Jira issue identifier")
+    cve_id: str = Field(description="CVE identifier")
 
 
 class ClarificationNeededData(BaseModel):
@@ -212,6 +213,7 @@ def render_prompt(input: InputSchema) -> str:
           PACKAGE: [package name]
           BRANCH: [target branch]
           PATCH_URL: [URL or reference to the source of the fix]
+          CVE_ID: [CVE identifier, leave blank if not applicable]
           JUSTIFICATION: [A brief but clear explanation of why this patch fixes the issue, linking it to the root cause.]
 
       If Clarification Needed:

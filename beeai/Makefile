@@ -44,6 +44,7 @@ run-backport-agent-standalone:
 		-e JIRA_ISSUE=$(JIRA_ISSUE) \
 		-e BRANCH=$(BRANCH) \
 		-e DRY_RUN=$(DRY_RUN) \
+		-e CVE_ID=$(CVE_ID) \
 		backport-agent
 
 
