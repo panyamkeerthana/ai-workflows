@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import os
-import subprocess
 import sys
 import traceback
 from pathlib import Path
@@ -23,7 +22,7 @@ from beeai_framework.tools.think import ThinkTool
 from beeai_framework.workflows import Workflow
 
 import tasks
-from constants import COMMIT_PREFIX
+from constants import COMMIT_PREFIX, I_AM_JOTNAR, CAREFULLY_REVIEW_CHANGES
 from observability import setup_observability
 from tools.commands import RunShellCommandTool
 from tools.specfile import AddChangelogEntryTool, BumpReleaseTool
@@ -47,7 +46,7 @@ class InputSchema(BaseModel):
 
 class OutputSchema(BaseModel):
     success: bool = Field(description="Whether the backport was successfully completed")
-    status: str = Field(description="Backport status")
+    status: str = Field(description="Backport status with details of how the potential merge conflicts were resolved")
     error: str | None = Field(description="Specific details about an error")
 
 
@@ -177,12 +176,24 @@ async def main() -> None:
             state.merge_request_url = await tasks.commit_push_and_open_mr(
                 local_clone=state.local_clone,
                 files_to_commit=["*.spec", f"{state.jira_issue}.patch"],
-                commit_message=f"{COMMIT_PREFIX} backport {state.jira_issue}",
+                commit_message=(
+                    f"{COMMIT_PREFIX} resolves {state.jira_issue}\n\n"
+                    f"{f'CVE: {state.cve_id}\n' if state.cve_id else ''}"
+                    f"Resolves: {state.jira_issue}\n\n"
+                    f"This commit was backported {I_AM_JOTNAR}\n\n"
+                    f"Assisted-by: Jotnar\n"
+                ),
                 fork_url=state.fork_url,
                 dist_git_branch=state.dist_git_branch,
                 update_branch=state.update_branch,
-                mr_title="{COMMIT_PREFIX} backport {state.jira_issue}",
-                mr_description="TODO",
+                mr_title=f"{COMMIT_PREFIX} resolves {state.jira_issue}",
+                mr_description=(
+                    f"This merge request was created {I_AM_JOTNAR}\n"
+                    f"{CAREFULLY_REVIEW_CHANGES}\n\n"
+                    f"Upstream patch: {state.upstream_fix}\n"
+                    "Backporting steps:\n"
+                    f"{state.status}"
+                ),
                 available_tools=gateway_tools,
                 commit_only=dry_run,
             )
