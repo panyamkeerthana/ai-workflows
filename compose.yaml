@@ -31,6 +31,26 @@ services:
       timeout: 2s
       retries: 30
 
+  testing-farm-sse-bridge:
+    image: testing-farm-sse-bridge:latest
+    build:
+      context: ./testing-farm-sse-bridge
+      dockerfile: Containerfile
+      target: ${BUILD_TARGET:-production}
+      args:
+        BASE_IMAGE: registry.fedoraproject.org/fedora:42
+    ports:
+      - published: "${TESTING_FARM_SSE_BRIDGE_PORT:-10000}"
+        target: 10000
+    env_file:
+      - .secrets/testing-farm-sse-bridge.env
+    restart: unless-stopped
+    healthcheck:
+      test: wget --spider -q "http://127.0.0.1:10000/healthz"
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
   goose:
     depends_on:
       mcp-atlassian: { condition: service_healthy }
