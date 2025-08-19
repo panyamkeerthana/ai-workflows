@@ -137,11 +137,11 @@ class GitLogSearchTool(Tool[GitLogSearchToolInput, ToolRunOptions, StringToolOut
             f"--pretty=%s %H",
         ]
 
-        result = await run_command(cmd, cwd=repo_path)
-        if result["exit_code"] != 0:
-            return StringToolOutput(result=f"ERROR: Git command failed: {result['stderr']}")
+        exit_code, stdout, stderr = await run_subprocess(cmd, cwd=repo_path)
+        if exit_code != 0:
+            return StringToolOutput(result=f"ERROR: Git command failed: {stderr}")
 
-        output = (result["stdout"] or "").strip()
+        output = (stdout or "").strip()
         if not output:
             return StringToolOutput(result=f"No matches found for '{search}'")
 
