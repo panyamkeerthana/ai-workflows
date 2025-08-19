@@ -82,8 +82,9 @@ async def comment_in_jira(
     available_tools: list[Tool],
 ) -> None:
     await run_tool(
-        "add_private_jira_comment",
+        "add_jira_comment",
         issue_key=jira_issue,
         comment=JIRA_COMMENT_TEMPLATE.substitute(AGENT_TYPE=agent_type, JIRA_COMMENT=comment_text),
+        private=True,
         available_tools=available_tools,
     )
