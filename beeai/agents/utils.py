@@ -104,25 +104,3 @@ async def mcp_tools(
         if filter:
             tools = [t for t in tools if filter(t.name)]
         yield tools
-
-
-def get_git_finalization_steps(
-    package: str,
-    jira_issue: str,
-    commit_title: str,
-    files_to_commit: str,
-    branch_name: str,
-    git_url: str = "https://gitlab.com/redhat/centos-stream/rpms",
-    dist_git_branch: str = "c9s",
-) -> str:
-    """Generate Git finalization steps with dry-run support"""
-
-    # Common commit steps
-    commit_steps = f"""* Add files to commit: {files_to_commit}
-            * Create commit with title: "{commit_title}"
-            * Include JIRA reference: "Resolves: {jira_issue}" in commit body"""
-
-    return f"""
-    Commit the changes:
-        {commit_steps}
-    """
