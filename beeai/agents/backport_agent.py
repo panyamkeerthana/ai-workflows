@@ -5,6 +5,7 @@ import sys
 import traceback
 from pathlib import Path
 
+import aiohttp
 from pydantic import BaseModel, Field
 
 from beeai_framework.agents.experimental import RequirementAgent
@@ -55,10 +56,9 @@ def render_prompt(input: InputSchema) -> str:
         'Work inside the repository cloned in "{{ local_clone }}", it is your current working directory\n'
         "Use the `git_log_search` tool to check if the jira issue ({{ jira_issue }}) or CVE ({{ cve_id }}) is already resolved.\n"
         "If the issue or the cve are already resolved, exit the backporting process with success=True and status=\"Backport already applied\"\n"
-        "Download the upstream fix from {{ upstream_fix }}\n"
-        'Store the patch file as "{{ jira_issue }}.patch" in the repository root\n'
         "If directory {{ unpacked_sources }} is not a git repository, run `git init` in it "
         "and create an initial commit\n"
+        "Backport the upstream fix stored in {{ jira_issue }}.patch in the repository root. "
         "Navigate to the directory {{ unpacked_sources }} and use `git am --reject` "
         "command to apply the patch {{ jira_issue }}.patch\n"
         "Resolve all conflicts inside {{ unpacked_sources }} directory and "
@@ -142,6 +142,13 @@ async def main() -> None:
             if len(unpacked_sources) != 1:
                 raise ValueError(f"Expected exactly one unpacked source, got {unpacked_sources}")
             [state.unpacked_sources] = unpacked_sources
+            timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(state.upstream_fix) as response:
+                    if response.status < 400:
+                        (state.local_clone / f"{state.jira_issue}.patch").write_text(await response.text())
+                    else:
+                        raise ValueError(f"Failed to fetch upstream fix: {response.status}")
             return "run_backport_agent"
 
         async def run_backport_agent(state):
