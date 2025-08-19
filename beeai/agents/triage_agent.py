@@ -23,11 +23,12 @@ from beeai_framework.tools import Tool
 from beeai_framework.tools.think import ThinkTool
 from beeai_framework.workflows import Workflow
 
+import tasks
 from observability import setup_observability
 from tools.commands import RunShellCommandTool
 from tools.patch_validator import PatchValidatorTool
 from tools.version_mapper import VersionMapperTool
-from utils import fix_await, get_agent_execution_config, mcp_tools, redis_client, post_private_jira_comment, run_tool
+from utils import fix_await, get_agent_execution_config, mcp_tools, redis_client, run_tool
 
 logger = logging.getLogger(__name__)
 
@@ -329,6 +330,8 @@ async def main() -> None:
             ]
         )
 
+        dry_run = os.getenv("DRY_RUN", "False").lower() == "true"
+
         class State(BaseModel):
             jira_issue: str
             cve_eligibility_result: dict | None = Field(default=None)
@@ -360,7 +363,7 @@ async def main() -> None:
                         jira_issue=state.jira_issue
                     )
                 )
-                return Workflow.END
+                return "comment_in_jira"
 
             reason = state.cve_eligibility_result.get('reason', 'Eligible')
             logger.info(f"Issue {state.jira_issue} is eligible for triage: {reason}")
@@ -379,6 +382,8 @@ async def main() -> None:
 
             if state.triage_result.resolution in [Resolution.REBASE, Resolution.BACKPORT]:
                 return "determine_target_branch"
+            elif state.triage_result.resolution in [Resolution.CLARIFICATION_NEEDED, Resolution.NO_ACTION]:
+                return "comment_in_jira"
             else:
                 return Workflow.END
 
@@ -398,9 +403,25 @@ async def main() -> None:
 
             return Workflow.END
 
+        async def comment_in_jira(state):
+            if dry_run:
+                return Workflow.END
+            await tasks.comment_in_jira(
+                jira_issue=state.jira_issue,
+                agent_type="Triage",
+                comment_text=(
+                    state.triage_result.data.additional_info_needed
+                    if state.triage_result.resolution == Resolution.CLARIFICATION_NEEDED
+                    else state.triage_result.data.reasoning
+                ),
+                available_tools=gateway_tools,
+            )
+            return Workflow.END
+
         workflow.add_step("check_cve_eligibility", check_cve_eligibility)
         workflow.add_step("run_triage_analysis", run_triage_analysis)
         workflow.add_step("determine_target_branch", determine_target_branch_step)
+        workflow.add_step("comment_in_jira", comment_in_jira)
 
         async def run_workflow(jira_issue):
             response = await workflow.run(State(jira_issue=jira_issue))
@@ -465,12 +486,6 @@ async def main() -> None:
                     if state.target_branch:
                         logger.info(f"Target branch: {state.target_branch}")
 
-                    agent_type = "Triage"
-                    if output.resolution.value == "clarification-needed":
-                        await post_private_jira_comment(gateway_tools, input.issue, agent_type, output.data.additional_info_needed)
-                    elif output.resolution.value == "no-action":
-                        await post_private_jira_comment(gateway_tools, input.issue, agent_type, output.data.reasoning)
-                        
                 except Exception as e:
                     error = "".join(traceback.format_exception(e))
                     logger.error(f"Exception during triage processing for {input.issue}: {error}")

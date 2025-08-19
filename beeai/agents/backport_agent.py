@@ -48,7 +48,6 @@ class InputSchema(BaseModel):
 class OutputSchema(BaseModel):
     success: bool = Field(description="Whether the backport was successfully completed")
     status: str = Field(description="Backport status")
-    mr_url: str | None = Field(description="URL to the opened merge request")
     error: str | None = Field(description="Specific details about an error")
 
 
@@ -114,6 +113,8 @@ async def main() -> None:
             ],
         )
 
+        dry_run = os.getenv("DRY_RUN", "False").lower() == "true"
+
         class State(BaseModel):
             jira_issue: str
             package: str
@@ -170,7 +171,7 @@ async def main() -> None:
             if state.backport_result.success:
                 return "commit_push_and_open_mr"
             else:
-                return Workflow.END
+                return "comment_in_jira"
 
         async def commit_push_and_open_mr(state):
             state.merge_request_url = await tasks.commit_push_and_open_mr(
@@ -183,13 +184,29 @@ async def main() -> None:
                 mr_title="{COMMIT_PREFIX} backport {state.jira_issue}",
                 mr_description="TODO",
                 available_tools=gateway_tools,
-                commit_only=os.getenv("DRY_RUN", "False").lower() == "true",
+                commit_only=dry_run,
+            )
+            return "comment_in_jira"
+
+        async def comment_in_jira(state):
+            if dry_run:
+                return Workflow.END
+            await tasks.comment_in_jira(
+                jira_issue=state.jira_issue,
+                agent_type="Backport",
+                comment_text=(
+                    state.merge_request_url
+                    if state.backport_result.success
+                    else f"Agent failed to perform a backport: {state.backport_result.error}"
+                ),
+                available_tools=gateway_tools,
             )
             return Workflow.END
 
         workflow.add_step("fork_and_prepare_dist_git", fork_and_prepare_dist_git)
         workflow.add_step("run_backport_agent", run_backport_agent)
         workflow.add_step("commit_push_and_open_mr", commit_push_and_open_mr)
+        workflow.add_step("comment_in_jira", comment_in_jira)
 
         async def run_workflow(package, dist_git_branch, upstream_fix, jira_issue, cve_id):
             response = await workflow.run(
@@ -276,18 +293,6 @@ async def main() -> None:
                     logger.info(
                         f"Backport processing completed for {backport_data.jira_issue}, " f"success: {state.backport_result.success}"
                     )
-
-                    agent_type = "Backport"
-                    if state.backport_result.success:
-                        logger.info(f"Updating JIRA {backport_data.jira_issue} with {state.backport_result.mr_url} ")
-
-                        await post_private_jira_comment(gateway_tools, backport_data.jira_issue, agent_type, state.backport_result.mr_url)
-                    else:
-                        logger.info(f"Agent failed to perform a backport for {backport_data.jira_issue}.")
-                        await post_private_jira_comment(gateway_tools, backport_data.jira_issue, agent_type,
-                                                        "Agent failed to perform a backport: {state.backport_result.error}")
-
-
 
                 except Exception as e:
                     error = "".join(traceback.format_exception(e))
