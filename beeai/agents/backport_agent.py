@@ -1,12 +1,10 @@
 import asyncio
 import logging
 import os
-from shutil import rmtree
-from pathlib import Path
 import subprocess
 import sys
 import traceback
-from typing import Optional
+from pathlib import Path
 
 from pydantic import BaseModel, Field
 
@@ -22,45 +20,41 @@ from beeai_framework.template import PromptTemplate, PromptTemplateInput
 from beeai_framework.tools import Tool
 from beeai_framework.tools.search.duckduckgo import DuckDuckGoSearchTool
 from beeai_framework.tools.think import ThinkTool
+from beeai_framework.workflows import Workflow
 
+import tasks
+from constants import COMMIT_PREFIX
+from observability import setup_observability
+from tools.commands import RunShellCommandTool
 from tools.specfile import AddChangelogEntryTool, BumpReleaseTool
 from tools.text import CreateTool, InsertTool, StrReplaceTool, ViewTool
 from tools.wicked_git import GitLogSearchTool, GitPatchCreationTool
-from constants import COMMIT_PREFIX, BRANCH_PREFIX
-from observability import setup_observability
-from tools.commands import RunShellCommandTool
 from triage_agent import BackportData, ErrorData
-from utils import get_agent_execution_config, mcp_tools, redis_client, get_git_finalization_steps
+from utils import check_subprocess, get_agent_execution_config, mcp_tools, redis_client
 
 logger = logging.getLogger(__name__)
 
 
 class InputSchema(BaseModel):
+    local_clone: Path = Field(description="Path to the local clone of forked dist-git repository")
+    unpacked_sources: Path = Field(description="Path to the unpacked (using `centpkg prep`) sources")
     package: str = Field(description="Package to update")
+    dist_git_branch: str = Field(description="Git branch in dist-git to be updated")
     upstream_fix: str = Field(description="Link to an upstream fix for the issue")
     jira_issue: str = Field(description="Jira issue to reference as resolved")
     cve_id: str = Field(default="", description="CVE ID if the jira issue is a CVE")
-    dist_git_branch: str = Field(description="Git branch in dist-git to be updated")
-    git_repo_basepath: str = Field(
-        description="Base path for cloned git repos",
-        default=os.getenv("GIT_REPO_BASEPATH"),
-    )
-    unpacked_sources: str = Field(
-        description="Path to the unpacked (using `centpkg prep`) sources",
-        default="",
-    )
 
 
 class OutputSchema(BaseModel):
     success: bool = Field(description="Whether the backport was successfully completed")
     status: str = Field(description="Backport status")
-    mr_url: Optional[str] = Field(description="URL to the opened merge request")
-    error: Optional[str] = Field(description="Specific details about an error")
+    mr_url: str | None = Field(description="URL to the opened merge request")
+    error: str | None = Field(description="Specific details about an error")
 
 
 def render_prompt(input: InputSchema) -> str:
     template = (
-        'Work inside the repository cloned at "{{ git_repo_basepath }}/{{ package }}"\n'
+        'Work inside the repository cloned in "{{ local_clone }}", it is your current working directory\n'
         "Use the `git_log_search` tool to check if the jira issue ({{ jira_issue }}) or CVE ({{ cve_id }}) is already resolved.\n"
         "If the issue or the cve are already resolved, exit the backporting process with success=True and status=\"Backport already applied\"\n"
         "Download the upstream fix from {{ upstream_fix }}\n"
@@ -74,64 +68,8 @@ def render_prompt(input: InputSchema) -> str:
         "Delete all *.rej files\n"
         "DO **NOT** RUN COMMAND `git am --continue`\n"
         "Once you resolve all conflicts, use tool git_patch_create to create a patch file\n"
-        "{{ backport_git_steps }}"
     )
-
-    # Define template function that can be called from the template
-    def backport_git_steps(data):
-        input_data = InputSchema.model_validate(data)
-        return get_git_finalization_steps(
-            package=input_data.package,
-            jira_issue=input_data.jira_issue,
-            commit_title=f"{COMMIT_PREFIX} backport {input_data.jira_issue}",
-            files_to_commit=f"*.spec and {input_data.jira_issue}.patch",
-            branch_name=f"{BRANCH_PREFIX}-{input_data.jira_issue}",
-            dist_git_branch=input_data.dist_git_branch,
-        )
-
-    return PromptTemplate(
-        PromptTemplateInput(schema=InputSchema, template=template, functions={"backport_git_steps": backport_git_steps})
-    ).render(input)
-
-
-def prepare_package(
-    package: str, jira_issue: str, dist_git_branch: str, input_schema: InputSchema
-) -> tuple[Path, Path]:
-    """
-    Prepare the package for backporting by cloning the dist-git repository, switching to the appropriate branch,
-    and downloading the sources.
-    Returns the path to the unpacked sources.
-    """
-    git_repo = Path(input_schema.git_repo_basepath)
-    git_repo.mkdir(parents=True, exist_ok=True)
-    subprocess.check_call(
-        [
-            "centpkg",
-            "clone",
-            "--anonymous",
-            "--branch",
-            dist_git_branch,
-            package,
-        ],
-        cwd=git_repo,
-    )
-    local_clone = git_repo / package
-    subprocess.check_call(
-        [
-            "git",
-            "switch",
-            "-c",
-            f"automated-package-update-{jira_issue}",
-            dist_git_branch,
-        ],
-        cwd=local_clone,
-    )
-    subprocess.check_call(["centpkg", "sources"], cwd=local_clone)
-    subprocess.check_call(["centpkg", "prep"], cwd=local_clone)
-    unpacked_sources = list(local_clone.glob(f"*-build/*{package}*"))
-    if len(unpacked_sources) != 1:
-        raise ValueError(f"Expected exactly one unpacked source, got {unpacked_sources}")
-    return unpacked_sources[0], local_clone
+    return PromptTemplate(PromptTemplateInput(schema=InputSchema, template=template)).render(input)
 
 
 async def main() -> None:
@@ -141,7 +79,7 @@ async def main() -> None:
     cve_id = os.getenv("CVE_ID", "")
 
     async with mcp_tools(os.getenv("MCP_GATEWAY_URL")) as gateway_tools:
-        agent = RequirementAgent(
+        backport_agent = RequirementAgent(
             llm=ChatModel.from_name(os.getenv("CHAT_MODEL")),
             tools=[
                 ThinkTool(),
@@ -155,11 +93,6 @@ async def main() -> None:
                 GitLogSearchTool(),
                 BumpReleaseTool(),
                 AddChangelogEntryTool(),
-            ]
-            + [
-                t
-                for t in gateway_tools
-                if t.name in ("fork_repository", "open_merge_request", "push_to_remote_repository")
             ],
             memory=UnconstrainedMemory(),
             requirements=[
@@ -182,41 +115,110 @@ async def main() -> None:
             ],
         )
 
-        dry_run = os.getenv("DRY_RUN", "False").lower() == "true"
+        class State(BaseModel):
+            jira_issue: str
+            package: str
+            dist_git_branch: str
+            upstream_fix: str
+            cve_id: str
+            local_clone: Path | None = Field(default=None)
+            update_branch: str | None = Field(default=None)
+            fork_url: str | None = Field(default=None)
+            unpacked_sources: Path | None = Field(default=None)
+            backport_result: OutputSchema | None = Field(default=None)
+            merge_request_url: str | None = Field(default=None)
 
-        async def run(input):
-            response = await agent.run(
-                prompt=render_prompt(input),
-                expected_output=OutputSchema,
-                execution=get_agent_execution_config(),
+        workflow = Workflow(State)
+
+        async def fork_and_prepare_dist_git(state):
+            state.local_clone, state.update_branch, state.fork_url = await tasks.fork_and_prepare_dist_git(
+                jira_issue=state.jira_issue,
+                package=state.package,
+                dist_git_branch=state.dist_git_branch,
+                available_tools=gateway_tools,
             )
-            return OutputSchema.model_validate_json(response.answer.text)
+            await check_subprocess(["centpkg", "sources"], cwd=state.local_clone)
+            await check_subprocess(["centpkg", "prep"], cwd=state.local_clone)
+            unpacked_sources = list(state.local_clone.glob(f"*-build/*{state.package}*"))
+            if len(unpacked_sources) != 1:
+                raise ValueError(f"Expected exactly one unpacked source, got {unpacked_sources}")
+            [state.unpacked_sources] = unpacked_sources
+            return "run_backport_agent"
+
+        async def run_backport_agent(state):
+            cwd = Path.cwd()
+            try:
+                # make things easier for the LLM
+                os.chdir(state.local_clone)
+                response = await backport_agent.run(
+                    prompt=render_prompt(
+                        InputSchema(
+                            local_clone=state.local_clone,
+                            unpacked_sources=state.unpacked_sources,
+                            package=state.package,
+                            dist_git_branch=state.dist_git_branch,
+                            upstream_fix=state.upstream_fix,
+                            jira_issue=state.jira_issue,
+                            cve_id=state.cve_id,
+                        ),
+                    ),
+                    expected_output=OutputSchema,
+                    execution=get_agent_execution_config(),
+                )
+                state.backport_result = OutputSchema.model_validate_json(response.answer.text)
+            finally:
+                os.chdir(cwd)
+            if state.backport_result.success:
+                return "commit_push_and_open_mr"
+            else:
+                return Workflow.END
+
+        async def commit_push_and_open_mr(state):
+            state.merge_request_url = await tasks.commit_push_and_open_mr(
+                local_clone=state.local_clone,
+                files_to_commit=["*.spec", f"{state.jira_issue}.patch"],
+                commit_message=f"{COMMIT_PREFIX} backport {state.jira_issue}",
+                fork_url=state.fork_url,
+                dist_git_branch=state.dist_git_branch,
+                update_branch=state.update_branch,
+                mr_title="{COMMIT_PREFIX} backport {state.jira_issue}",
+                mr_description="TODO",
+                available_tools=gateway_tools,
+                commit_only=os.getenv("DRY_RUN", "False").lower() == "true",
+            )
+            return Workflow.END
+
+        workflow.add_step("fork_and_prepare_dist_git", fork_and_prepare_dist_git)
+        workflow.add_step("run_backport_agent", run_backport_agent)
+        workflow.add_step("commit_push_and_open_mr", commit_push_and_open_mr)
+
+        async def run_workflow(package, dist_git_branch, upstream_fix, jira_issue, cve_id):
+            response = await workflow.run(
+                State(
+                    package=package,
+                    dist_git_branch=dist_git_branch,
+                    upstream_fix=upstream_fix,
+                    jira_issue=jira_issue,
+                    cve_id=cve_id,
+                ),
+            )
+            return response.state
 
         if (
             (package := os.getenv("PACKAGE", None))
+            and (branch := os.getenv("BRANCH", None))
             and (upstream_fix := os.getenv("UPSTREAM_FIX", None))
             and (jira_issue := os.getenv("JIRA_ISSUE", None))
-            and (branch := os.getenv("BRANCH", None))
         ):
             logger.info("Running in direct mode with environment variables")
-            input = InputSchema(
+            state = await run_workflow(
                 package=package,
+                dist_git_branch=branch,
                 upstream_fix=upstream_fix,
                 jira_issue=jira_issue,
-                dist_git_branch=branch,
-                cve_id=cve_id,
+                cve_id=os.getenv("CVE_ID", ""),
             )
-            unpacked_sources, local_clone = prepare_package(package, jira_issue, branch, input)
-            input.unpacked_sources = str(unpacked_sources)
-            try:
-                output = await run(input)
-            finally:
-                if not dry_run:
-                    logger.info(f"Removing {local_clone}")
-                    rmtree(local_clone)
-                else:
-                    logger.info(f"DRY RUN: Not removing {local_clone}")
-            logger.info(f"Direct run completed: {output.model_dump_json(indent=4)}")
+            logger.info(f"Direct run completed: {state.backport_result.model_dump_json(indent=4)}")
             return
 
         class Task(BaseModel):
@@ -245,18 +247,6 @@ async def main() -> None:
                     f"JIRA: {backport_data.jira_issue}, attempt: {task.attempts + 1}"
                 )
 
-                input = InputSchema(
-                    package=backport_data.package,
-                    upstream_fix=backport_data.patch_url,
-                    jira_issue=backport_data.jira_issue,
-                    dist_git_branch=backport_data.branch,
-                    cve_id=backport_data.cve_id,
-                )
-                unpacked_sources, local_clone = prepare_package(
-                    backport_data.package, backport_data.jira_issue, backport_data.branch, input
-                )
-                input.unpacked_sources = str(unpacked_sources)
-
                 async def retry(task, error):
                     task.attempts += 1
                     if task.attempts < max_retries:
@@ -274,23 +264,29 @@ async def main() -> None:
 
                 try:
                     logger.info(f"Starting backport processing for {backport_data.jira_issue}")
-                    output = await run(input)
+                    state = await run_workflow(
+                        package=backport_data.package,
+                        dist_git_branch=backport_data.branch,
+                        upstream_fix=backport_data.patch_url,
+                        jira_issue=backport_data.jira_issue,
+                        cve_id=backport_data.cve_id,
+                    )
                     logger.info(
-                        f"Backport processing completed for {backport_data.jira_issue}, " f"success: {output.success}"
+                        f"Backport processing completed for {backport_data.jira_issue}, " f"success: {state.backport_result.success}"
                     )
                 except Exception as e:
                     error = "".join(traceback.format_exception(e))
                     logger.error(f"Exception during backport processing for {backport_data.jira_issue}: {error}")
-                    await retry(task, ErrorData(details=error, jira_issue=input.jira_issue).model_dump_json())
+                    await retry(task, ErrorData(details=error, jira_issue=backport_data.jira_issue).model_dump_json())
                     rmtree(local_clone)
                 else:
                     rmtree(local_clone)
-                    if output.success:
+                    if state.backport_data.success:
                         logger.info(f"Backport successful for {backport_data.jira_issue}, " f"adding to completed list")
-                        await redis.lpush("completed_backport_list", output.model_dump_json())
+                        await redis.lpush("completed_backport_list", state.backport_data.model_dump_json())
                     else:
-                        logger.warning(f"Backport failed for {backport_data.jira_issue}: {output.error}")
-                        await retry(task, output.error)
+                        logger.warning(f"Backport failed for {backport_data.jira_issue}: {state.backport_data.error}")
+                        await retry(task, state.backport_data.error)
 
 
 if __name__ == "__main__":
