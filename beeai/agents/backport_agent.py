@@ -1,11 +1,9 @@
 import asyncio
 import logging
 import os
-from shutil import rmtree
 import subprocess
 import sys
 import traceback
-
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -78,7 +76,6 @@ async def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     setup_observability(os.environ["COLLECTOR_ENDPOINT"])
-    cve_id = os.getenv("CVE_ID", "")
 
     async with mcp_tools(os.environ["MCP_GATEWAY_URL"]) as gateway_tools:
         backport_agent = RequirementAgent(
@@ -296,15 +293,13 @@ async def main() -> None:
                     error = "".join(traceback.format_exception(e))
                     logger.error(f"Exception during backport processing for {backport_data.jira_issue}: {error}")
                     await retry(task, ErrorData(details=error, jira_issue=backport_data.jira_issue).model_dump_json())
-                    rmtree(local_clone)
                 else:
-                    rmtree(local_clone)
-                    if state.backport_data.success:
+                    if state.backport_result.success:
                         logger.info(f"Backport successful for {backport_data.jira_issue}, " f"adding to completed list")
-                        await redis.lpush("completed_backport_list", output.model_dump_json())
+                        await redis.lpush("completed_backport_list", state.backport_result.model_dump_json())
                     else:
-                        logger.warning(f"Backport failed for {backport_data.jira_issue}: {state.backport_data.error}")
-                        await retry(task, state.backport_data.error)
+                        logger.warning(f"Backport failed for {backport_data.jira_issue}: {state.backport_result.error}")
+                        await retry(task, state.backport_result.error)
 
 
 if __name__ == "__main__":
