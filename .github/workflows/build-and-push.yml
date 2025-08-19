@@ -52,30 +52,6 @@ jobs:
   build-and-push-testing-farm-sse-bridge:
     runs-on: ubuntu-latest
     steps:
-      - name: Ensure Repo Exists
-        run: |
-          curl -s -o response.txt -w "%{http_code}" -X POST https://quay.io/api/v1/repository \
-            -H "Content-Type: application/json" \
-            -u "${{ secrets.REGISTRY_LOGIN }}:${{ secrets.REGISTRY_TOKEN }}" \
-            -d "{
-              \"namespace\": \"jotnar\",
-              \"repository\": \"testing-farm-sse-bridge\",
-              \"description\": \"Testing Farm SSE Bridge container\",
-              \"visibility\": \"public\",
-              \"repo_kind\": \"image\"
-            }" | {
-              read status
-              if [[ "$status" == "200" || "$status" == "201" ]]; then
-                echo "✅ ✅ Repo created or already exists."
-              elif [[ "$status" == "409" ]]; then
-                echo "✅  Repo already exists."
-              else
-                echo "❌ Failed to create repo. Status: $status"
-                cat response.txt
-                exit 1
-              fi
-            }
-
       - name: Build and push testing-farm-sse-bridge to quay.io registry
         uses: sclorg/build-and-push-action@v4
         with:
