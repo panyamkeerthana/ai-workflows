@@ -7,7 +7,7 @@ from typing import Tuple
 
 from beeai_framework.tools import Tool
 
-from constants import BRANCH_PREFIX
+from constants import BRANCH_PREFIX, JIRA_COMMENT_TEMPLATE
 from utils import check_subprocess, run_tool
 
 
@@ -71,5 +71,20 @@ async def commit_push_and_open_mr(
         description=mr_description,
         target=dist_git_branch,
         source=update_branch,
+        available_tools=available_tools,
+    )
+
+
+async def comment_in_jira(
+    jira_issue: str,
+    agent_type: str,
+    comment_text: str,
+    available_tools: list[Tool],
+) -> None:
+    await run_tool(
+        "add_jira_comment",
+        issue_key=jira_issue,
+        comment=JIRA_COMMENT_TEMPLATE.substitute(AGENT_TYPE=agent_type, JIRA_COMMENT=comment_text),
+        private=True,
         available_tools=available_tools,
     )
