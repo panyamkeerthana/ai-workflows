@@ -1,11 +1,11 @@
 import asyncio
 import logging
 import os
-import subprocess
 import sys
 import traceback
 from pathlib import Path
 
+import aiohttp
 from pydantic import BaseModel, Field
 
 from beeai_framework.agents.experimental import RequirementAgent
@@ -23,7 +23,7 @@ from beeai_framework.tools.think import ThinkTool
 from beeai_framework.workflows import Workflow
 
 import tasks
-from constants import COMMIT_PREFIX
+from constants import COMMIT_PREFIX, I_AM_JOTNAR, CAREFULLY_REVIEW_CHANGES
 from observability import setup_observability
 from tools.commands import RunShellCommandTool
 from tools.specfile import AddChangelogEntryTool, BumpReleaseTool
@@ -47,7 +47,7 @@ class InputSchema(BaseModel):
 
 class OutputSchema(BaseModel):
     success: bool = Field(description="Whether the backport was successfully completed")
-    status: str = Field(description="Backport status")
+    status: str = Field(description="Backport status with details of how the potential merge conflicts were resolved")
     error: str | None = Field(description="Specific details about an error")
 
 
@@ -56,10 +56,9 @@ def render_prompt(input: InputSchema) -> str:
         'Work inside the repository cloned in "{{ local_clone }}", it is your current working directory\n'
         "Use the `git_log_search` tool to check if the jira issue ({{ jira_issue }}) or CVE ({{ cve_id }}) is already resolved.\n"
         "If the issue or the cve are already resolved, exit the backporting process with success=True and status=\"Backport already applied\"\n"
-        "Download the upstream fix from {{ upstream_fix }}\n"
-        'Store the patch file as "{{ jira_issue }}.patch" in the repository root\n'
         "If directory {{ unpacked_sources }} is not a git repository, run `git init` in it "
         "and create an initial commit\n"
+        "Backport the upstream fix stored in {{ jira_issue }}.patch in the repository root. "
         "Navigate to the directory {{ unpacked_sources }} and use `git am --reject` "
         "command to apply the patch {{ jira_issue }}.patch\n"
         "Resolve all conflicts inside {{ unpacked_sources }} directory and "
@@ -143,6 +142,13 @@ async def main() -> None:
             if len(unpacked_sources) != 1:
                 raise ValueError(f"Expected exactly one unpacked source, got {unpacked_sources}")
             [state.unpacked_sources] = unpacked_sources
+            timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(state.upstream_fix) as response:
+                    if response.status < 400:
+                        (state.local_clone / f"{state.jira_issue}.patch").write_text(await response.text())
+                    else:
+                        raise ValueError(f"Failed to fetch upstream fix: {response.status}")
             return "run_backport_agent"
 
         async def run_backport_agent(state):
@@ -177,12 +183,24 @@ async def main() -> None:
             state.merge_request_url = await tasks.commit_push_and_open_mr(
                 local_clone=state.local_clone,
                 files_to_commit=["*.spec", f"{state.jira_issue}.patch"],
-                commit_message=f"{COMMIT_PREFIX} backport {state.jira_issue}",
+                commit_message=(
+                    f"{COMMIT_PREFIX} resolves {state.jira_issue}\n\n"
+                    f"{f'CVE: {state.cve_id}\n' if state.cve_id else ''}"
+                    f"Resolves: {state.jira_issue}\n\n"
+                    f"This commit was backported {I_AM_JOTNAR}\n\n"
+                    f"Assisted-by: Jotnar\n"
+                ),
                 fork_url=state.fork_url,
                 dist_git_branch=state.dist_git_branch,
                 update_branch=state.update_branch,
-                mr_title="{COMMIT_PREFIX} backport {state.jira_issue}",
-                mr_description="TODO",
+                mr_title=f"{COMMIT_PREFIX} resolves {state.jira_issue}",
+                mr_description=(
+                    f"This merge request was created {I_AM_JOTNAR}\n"
+                    f"{CAREFULLY_REVIEW_CHANGES}\n\n"
+                    f"Upstream patch: {state.upstream_fix}\n"
+                    "Backporting steps:\n"
+                    f"{state.status}"
+                ),
                 available_tools=gateway_tools,
                 commit_only=dry_run,
             )
