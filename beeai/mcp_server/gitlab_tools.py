@@ -5,6 +5,7 @@ from typing import Annotated
 from urllib.parse import urlparse
 
 from ogr.factory import get_project
+from ogr.exceptions import OgrException
 from pydantic import Field
 
 
@@ -43,6 +44,13 @@ def open_merge_request(
     pr = project.create_pr(title, description, target, source)
     if not pr:
         return "Failed to open the merge request"
+    # by default, set this label on a newly created MR so we can inspect it ASAP
+    try:
+        pr.add_label("jotnar_needs_attention")
+    except OgrException as ex:
+        # TODO: log the error here
+        # we should still continue and return the MR URL
+        pass
     return pr.url
 
 

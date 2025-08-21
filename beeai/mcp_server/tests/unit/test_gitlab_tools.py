@@ -25,9 +25,11 @@ def test_open_merge_request():
     target = "c10s"
     source = "automated-package-update-RHEL-12345"
     mr_url = "https://gitlab.com/redhat/centos-stream/rpms/bash/-/merge_requests/1"
+    pr_mock = flexmock(url=mr_url)
     flexmock(GitlabService).should_receive("get_project_from_url").with_args(
         url=fork_url
-    ).and_return(flexmock(create_pr=lambda title, body, target, source: flexmock(url=mr_url)))
+    ).and_return(flexmock(create_pr=lambda title, body, target, source: pr_mock))
+    pr_mock.should_receive("add_label").with_args("jotnar_needs_attention").once()
     assert (
         open_merge_request(
             fork_url=fork_url,
