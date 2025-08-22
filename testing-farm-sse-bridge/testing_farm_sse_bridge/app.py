@@ -31,7 +31,7 @@ paths:
       summary: Stream Testing Farm requests via SSE
       description: |
         Streams server-sent events (SSE) with an initial snapshot followed by deltas and periodic pings.
-        Any query parameters other than 'until' are forwarded upstream to Testing Farm's /v0.1/requests.
+        Any query parameters other than 'until' and 'id' are forwarded upstream to Testing Farm's /v0.1/requests.
         If 'until=complete' is used, an 'all_complete' event is emitted just before the server closes the stream.
         Error events include a 'ts' field for correlation.
       parameters:
@@ -45,6 +45,28 @@ paths:
           description: |
             closed: stream indefinitely.
             complete: end the SSE stream once all requests are in terminal states.
+        - in: query
+          name: id
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: |
+            Filter results to only include requests with the specified IDs.
+            Can be specified multiple times to filter for multiple IDs.
+            Example: ?id=request1&id=request2&id=request3
+        - in: query
+          name: token_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: |
+            Filter requests by token ID. If omitted, the bridge injects the
+            token_id derived from the authenticated token via /whoami.
       responses:
         '200':
           description: |
@@ -237,27 +259,52 @@ async def get_bearer_token() -> str:
         return bearer_token
 
 
+async def fetch_token_id_for_auth_header(auth_header_value: str) -> Optional[str]:
+    """Fetch token_id via /whoami using the provided Authorization header."""
+    try:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+            resp = await client.get(
+                f"{TESTING_FARM_API_URL}/v0.1/whoami",
+                headers={"Authorization": auth_header_value},
+            )
+            resp.raise_for_status()
+            try:
+                meta: Any = resp.json()
+                token_obj = meta.get("token") if isinstance(meta, dict) else None
+                token_id_val = token_obj.get("id") if isinstance(token_obj, dict) else None
+                if isinstance(token_id_val, str) and token_id_val:
+                    return token_id_val
+            except json.JSONDecodeError:
+                return None
+    except (httpx.HTTPError, ValueError):
+        return None
+    return None
+
 # -------------------------------------------------------------------
 # Polling Helpers
 # -------------------------------------------------------------------
 
-async def fetch_requests(client: httpx.AsyncClient, params: Dict[str, Any]) -> list[Dict[str, Any]]:
+async def fetch_requests(client: httpx.AsyncClient, params: Dict[str, Any], headers: Dict[str, str]) -> list[Dict[str, Any]]:
     """Fetch and normalize Testing Farm requests."""
-    headers = {"Authorization": f"Bearer {await get_bearer_token()}"}
-    resp = await client.get(f"{TESTING_FARM_API_URL}/v0.1/requests", params=params, headers=headers)
+    # Build request to capture the final encoded URL for logging/debugging
+    req = client.build_request("GET", f"{TESTING_FARM_API_URL}/v0.1/requests", params=params, headers=headers)
+    logger.info(f"Upstream GET {req.url}")
+    resp = await client.send(req)
     resp.raise_for_status()
-    data: Any = resp.json()
-    # Normalize to a list of request objects
+
+    try:
+        data: Any = resp.json()
+    except json.JSONDecodeError:
+        return []
+    if data is None:
+        return []
+
+    # Only accept the canonical list shape for /v0.1/requests
     if isinstance(data, list):
         return data
-    if isinstance(data, dict):
-        if isinstance(data.get("items"), list):
-            return data["items"]  # type: ignore[return-value]
-        if isinstance(data.get("requests"), list):
-            return data["requests"]  # type: ignore[return-value]
-        if "id" in data:
-            return [data]  # type: ignore[list-item]
-    raise ValueError(f"Unexpected response shape: {type(data).__name__}")
+
+    # Any other JSON type or envelope → empty
+    return []
 
 
 def emit_snapshot(requests: list[Dict[str, Any]]) -> str:
@@ -306,7 +353,7 @@ def emit_error(err_type: str, detail: str, trace: Optional[str] = None) -> str:
 # Poll Loop
 # -------------------------------------------------------------------
 
-async def poll_requests(params: Dict[str, Any], conn_id: str, until_mode: str) -> AsyncGenerator[str, None]:
+async def poll_requests(params: Dict[str, Any], conn_id: str, until_mode: str, request_ids: Optional[list[str]] = None, headers: Optional[Dict[str, str]] = None) -> AsyncGenerator[str, None]:
     """Poll Testing Farm requests and emit SSE events for changes."""
     seen: Dict[str, str] = {}
     snapshot_sent = False
@@ -315,7 +362,11 @@ async def poll_requests(params: Dict[str, Any], conn_id: str, until_mode: str) -
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
         while not shutdown_event.is_set():
             try:
-                requests_list = await fetch_requests(client, params)
+                effective_headers = headers or {"Authorization": f"Bearer {await get_bearer_token()}"}
+                requests_list = await fetch_requests(client, params, effective_headers)
+                # Local filtering when client specified one or more ids
+                if request_ids:
+                    requests_list = [r for r in requests_list if r.get("id") in request_ids]
                 logger.info("[%s] Poll OK: %d requests", conn_id, len(requests_list))
                 backoff = POLL_INTERVAL_SECONDS
             except httpx.HTTPStatusError as e:
@@ -364,7 +415,6 @@ async def poll_requests(params: Dict[str, Any], conn_id: str, until_mode: str) -
                 last_ping = time.monotonic()
             await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
-
 # -------------------------------------------------------------------
 # FastAPI Routes
 # -------------------------------------------------------------------
@@ -373,8 +423,9 @@ async def poll_requests(params: Dict[str, Any], conn_id: str, until_mode: str) -
 async def startup_event() -> None:
     """Initialize the application on startup."""
     try:
-        global bearer_token
-        bearer_token = await fetch_bearer_token()
+        # Validate environment token if present
+        if API_TOKEN:
+            _ = await fetch_bearer_token()
     except SystemExit:
         raise
     except (httpx.HTTPError, ValueError, TypeError, KeyError, json.JSONDecodeError) as e:
@@ -394,12 +445,30 @@ async def stream_requests(request: Request) -> StreamingResponse:
     params = dict(request.query_params)
     # Pull bridge-specific control parameter and avoid forwarding it upstream
     until_mode = params.pop("until", "closed")
+    # Extract and remove repeated id params so we do not forward them upstream
+    request_ids = request.query_params.getlist("id")
+    if "id" in params:
+        params.pop("id")
+
+    # Determine Authorization header to use upstream
+    client_auth_header = request.headers.get("Authorization")
+    if client_auth_header:
+        upstream_headers = {"Authorization": client_auth_header}
+    else:
+        upstream_headers = {"Authorization": f"Bearer {await get_bearer_token()}"}
+
+    # Inject token_id just-in-time if caller did not provide it
+    if "token_id" not in params:
+        token_id = await fetch_token_id_for_auth_header(upstream_headers["Authorization"])
+        if token_id:
+            params["token_id"] = token_id
+
     conn_id = str(uuid.uuid4())[:8]
-    logger.info("[%s] Client connected params=%s until=%s", conn_id, params, until_mode)
+    logger.info("[%s] Client connected params=%s until=%s request_ids=%s", conn_id, params, until_mode, request_ids)
 
     async def event_gen() -> AsyncGenerator[str, None]:
         try:
-            async for evt in poll_requests(params, conn_id, until_mode):
+            async for evt in poll_requests(params, conn_id, until_mode, request_ids, headers=upstream_headers):
                 if await request.is_disconnected() or shutdown_event.is_set():
                     break
                 yield evt
