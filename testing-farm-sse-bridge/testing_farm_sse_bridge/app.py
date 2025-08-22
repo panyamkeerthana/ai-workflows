@@ -237,6 +237,27 @@ async def get_bearer_token() -> str:
         return bearer_token
 
 
+async def fetch_token_id_for_auth_header(auth_header_value: str) -> Optional[str]:
+    """Fetch token_id via /whoami using the provided Authorization header."""
+    try:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+            resp = await client.get(
+                f"{TESTING_FARM_API_URL}/v0.1/whoami",
+                headers={"Authorization": auth_header_value},
+            )
+            resp.raise_for_status()
+            try:
+                meta: Any = resp.json()
+                token_obj = meta.get("token") if isinstance(meta, dict) else None
+                token_id_val = token_obj.get("id") if isinstance(token_obj, dict) else None
+                if isinstance(token_id_val, str) and token_id_val:
+                    return token_id_val
+            except json.JSONDecodeError:
+                return None
+    except (httpx.HTTPError, ValueError):
+        return None
+    return None
+
 # -------------------------------------------------------------------
 # Polling Helpers
 # -------------------------------------------------------------------
@@ -306,7 +327,7 @@ def emit_error(err_type: str, detail: str, trace: Optional[str] = None) -> str:
 # Poll Loop
 # -------------------------------------------------------------------
 
-async def poll_requests(params: Dict[str, Any], conn_id: str, until_mode: str) -> AsyncGenerator[str, None]:
+async def poll_requests(params: Dict[str, Any], conn_id: str, until_mode: str, request_ids: Optional[list[str]] = None, headers: Optional[Dict[str, str]] = None) -> AsyncGenerator[str, None]:
     """Poll Testing Farm requests and emit SSE events for changes."""
     seen: Dict[str, str] = {}
     snapshot_sent = False
@@ -315,7 +336,11 @@ async def poll_requests(params: Dict[str, Any], conn_id: str, until_mode: str) -
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
         while not shutdown_event.is_set():
             try:
-                requests_list = await fetch_requests(client, params)
+                effective_headers = headers or {"Authorization": f"Bearer {await get_bearer_token()}"}
+                requests_list = await fetch_requests(client, params, effective_headers)
+                # Local filtering when client specified one or more ids
+                if request_ids:
+                    requests_list = [r for r in requests_list if r.get("id") in request_ids]
                 logger.info("[%s] Poll OK: %d requests", conn_id, len(requests_list))
                 backoff = POLL_INTERVAL_SECONDS
             except httpx.HTTPStatusError as e:
@@ -364,7 +389,6 @@ async def poll_requests(params: Dict[str, Any], conn_id: str, until_mode: str) -
                 last_ping = time.monotonic()
             await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
-
 # -------------------------------------------------------------------
 # FastAPI Routes
 # -------------------------------------------------------------------
@@ -373,8 +397,9 @@ async def poll_requests(params: Dict[str, Any], conn_id: str, until_mode: str) -
 async def startup_event() -> None:
     """Initialize the application on startup."""
     try:
-        global bearer_token
-        bearer_token = await fetch_bearer_token()
+        # Validate environment token if present
+        if API_TOKEN:
+            _ = await fetch_bearer_token()
     except SystemExit:
         raise
     except (httpx.HTTPError, ValueError, TypeError, KeyError, json.JSONDecodeError) as e:
@@ -394,12 +419,30 @@ async def stream_requests(request: Request) -> StreamingResponse:
     params = dict(request.query_params)
     # Pull bridge-specific control parameter and avoid forwarding it upstream
     until_mode = params.pop("until", "closed")
+    # Extract and remove repeated id params so we do not forward them upstream
+    request_ids = request.query_params.getlist("id")
+    if "id" in params:
+        params.pop("id")
+
+    # Determine Authorization header to use upstream
+    client_auth_header = request.headers.get("Authorization")
+    if client_auth_header:
+        upstream_headers = {"Authorization": client_auth_header}
+    else:
+        upstream_headers = {"Authorization": f"Bearer {await get_bearer_token()}"}
+
+    # Inject token_id just-in-time if caller did not provide it
+    if "token_id" not in params:
+        token_id = await fetch_token_id_for_auth_header(upstream_headers["Authorization"])
+        if token_id:
+            params["token_id"] = token_id
+
     conn_id = str(uuid.uuid4())[:8]
-    logger.info("[%s] Client connected params=%s until=%s", conn_id, params, until_mode)
+    logger.info("[%s] Client connected params=%s until=%s request_ids=%s", conn_id, params, until_mode, request_ids)
 
     async def event_gen() -> AsyncGenerator[str, None]:
         try:
-            async for evt in poll_requests(params, conn_id, until_mode):
+            async for evt in poll_requests(params, conn_id, until_mode, request_ids, headers=upstream_headers):
                 if await request.is_disconnected() or shutdown_event.is_set():
                     break
                 yield evt
