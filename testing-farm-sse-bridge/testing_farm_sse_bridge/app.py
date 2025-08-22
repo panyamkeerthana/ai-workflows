@@ -31,7 +31,7 @@ paths:
       summary: Stream Testing Farm requests via SSE
       description: |
         Streams server-sent events (SSE) with an initial snapshot followed by deltas and periodic pings.
-        Any query parameters other than 'until' are forwarded upstream to Testing Farm's /v0.1/requests.
+        Any query parameters other than 'until' and 'id' are forwarded upstream to Testing Farm's /v0.1/requests.
         If 'until=complete' is used, an 'all_complete' event is emitted just before the server closes the stream.
         Error events include a 'ts' field for correlation.
       parameters:
@@ -45,6 +45,28 @@ paths:
           description: |
             closed: stream indefinitely.
             complete: end the SSE stream once all requests are in terminal states.
+        - in: query
+          name: id
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: |
+            Filter results to only include requests with the specified IDs.
+            Can be specified multiple times to filter for multiple IDs.
+            Example: ?id=request1&id=request2&id=request3
+        - in: query
+          name: token_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: |
+            Filter requests by token ID. If omitted, the bridge injects the
+            token_id derived from the authenticated token via /whoami.
       responses:
         '200':
           description: |
@@ -262,23 +284,27 @@ async def fetch_token_id_for_auth_header(auth_header_value: str) -> Optional[str
 # Polling Helpers
 # -------------------------------------------------------------------
 
-async def fetch_requests(client: httpx.AsyncClient, params: Dict[str, Any]) -> list[Dict[str, Any]]:
+async def fetch_requests(client: httpx.AsyncClient, params: Dict[str, Any], headers: Dict[str, str]) -> list[Dict[str, Any]]:
     """Fetch and normalize Testing Farm requests."""
-    headers = {"Authorization": f"Bearer {await get_bearer_token()}"}
-    resp = await client.get(f"{TESTING_FARM_API_URL}/v0.1/requests", params=params, headers=headers)
+    # Build request to capture the final encoded URL for logging/debugging
+    req = client.build_request("GET", f"{TESTING_FARM_API_URL}/v0.1/requests", params=params, headers=headers)
+    logger.info(f"Upstream GET {req.url}")
+    resp = await client.send(req)
     resp.raise_for_status()
-    data: Any = resp.json()
-    # Normalize to a list of request objects
+
+    try:
+        data: Any = resp.json()
+    except json.JSONDecodeError:
+        return []
+    if data is None:
+        return []
+
+    # Only accept the canonical list shape for /v0.1/requests
     if isinstance(data, list):
         return data
-    if isinstance(data, dict):
-        if isinstance(data.get("items"), list):
-            return data["items"]  # type: ignore[return-value]
-        if isinstance(data.get("requests"), list):
-            return data["requests"]  # type: ignore[return-value]
-        if "id" in data:
-            return [data]  # type: ignore[list-item]
-    raise ValueError(f"Unexpected response shape: {type(data).__name__}")
+
+    # Any other JSON type or envelope → empty
+    return []
 
 
 def emit_snapshot(requests: list[Dict[str, Any]]) -> str:
