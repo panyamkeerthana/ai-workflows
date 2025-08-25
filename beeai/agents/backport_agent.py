@@ -65,7 +65,13 @@ def render_prompt(input: InputSchema) -> str:
         "leave the repository in a dirty state\n"
         "Delete all *.rej files\n"
         "DO **NOT** RUN COMMAND `git am --continue`\n"
-        "Once you resolve all conflicts, use tool git_patch_create to create a patch file\n"
+        "Once you resolve all conflicts, use tool `git_patch_create` with argument `patch_file_path` "
+        "set to \"{{ local_clone }}/{{ jira_issue }}.patch\" to update the patch file\n"
+        "Increment the 'Release' field in the {{ package }}.spec file following RPM packaging conventions "
+        "using the `bump_release` tool\n"
+        "Add a new changelog entry to the {{ package }}.spec file using the `add_changelog_entry` tool using name "
+        '"RHEL Packaging Agent <jotnar@redhat.com>"\n'
+        "Add a new `Patch` entry to the {{ package }}.spec after the last definition of `Patch` for {{ jira_issue }}.patch\n"
     )
     return PromptTemplate(PromptTemplateInput(schema=InputSchema, template=template)).render(input)
 
@@ -104,10 +110,6 @@ async def main() -> None:
                 "Ignore pre-existing rpmlint warnings unless they're related to your changes",
                 "Run `centpkg prep` to verify all patches apply cleanly during build preparation",
                 "Generate an SRPM using `centpkg srpm` command to ensure complete build readiness",
-                "Increment the 'Release' field in the .spec file following RPM packaging conventions "
-                "using the `bump_release` tool",
-                "Add a new changelog entry to the .spec file using the `add_changelog_entry` tool using name "
-                '"RHEL Packaging Agent <jotnar@redhat.com>"',
                 "* IMPORTANT: Only perform changes relevant to the backport update",
             ],
         )
