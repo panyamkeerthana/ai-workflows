@@ -54,8 +54,8 @@ class OutputSchema(BaseModel):
 def render_prompt(input: InputSchema) -> str:
     template = (
         'Work inside the repository cloned in "{{ local_clone }}", it is your current working directory\n'
-        "Use the `git_log_search` tool to check if the jira issue ({{ jira_issue }}) or CVE ({{ cve_id }}) is already resolved.\n"
-        "If the issue or the cve are already resolved, exit the backporting process with success=True and status=\"Backport already applied\"\n"
+        "Use the `git_log_search` tool in the directory {{ local_clone }} to check if the jira issue ({{ jira_issue }}) or CVE ({{ cve_id }}) is already resolved.\n"
+        "If the issue or the CVE are already resolved, exit the backporting process with success=True and status=\"Backport already applied\"\n"
         "If directory {{ unpacked_sources }} is not a git repository, run `git init` in it "
         "and create an initial commit\n"
         "Backport the upstream fix stored in {{ jira_issue }}.patch in the repository root. "
