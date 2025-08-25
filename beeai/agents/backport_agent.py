@@ -199,7 +199,7 @@ async def main() -> None:
                     f"{CAREFULLY_REVIEW_CHANGES}\n\n"
                     f"Upstream patch: {state.upstream_fix}\n"
                     "Backporting steps:\n"
-                    f"{state.status}"
+                    f"{state.backport_result.status}"
                 ),
                 available_tools=gateway_tools,
                 commit_only=dry_run,
