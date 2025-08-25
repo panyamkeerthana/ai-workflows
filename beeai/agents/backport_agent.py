@@ -23,7 +23,7 @@ from beeai_framework.tools.think import ThinkTool
 from beeai_framework.workflows import Workflow
 
 import tasks
-from constants import COMMIT_PREFIX, I_AM_JOTNAR, CAREFULLY_REVIEW_CHANGES
+from constants import I_AM_JOTNAR, CAREFULLY_REVIEW_CHANGES
 from observability import setup_observability
 from tools.commands import RunShellCommandTool
 from tools.specfile import AddChangelogEntryTool, BumpReleaseTool
@@ -186,8 +186,9 @@ async def main() -> None:
                 local_clone=state.local_clone,
                 files_to_commit=["*.spec", f"{state.jira_issue}.patch"],
                 commit_message=(
-                    f"{COMMIT_PREFIX} resolves {state.jira_issue}\n\n"
+                    f"Fix {state.jira_issue}\n\n"
                     f"{f'CVE: {state.cve_id}\n' if state.cve_id else ''}"
+                    f"{f'Upstream fix: {state.upstream_fix}\n'}"
                     f"Resolves: {state.jira_issue}\n\n"
                     f"This commit was backported {I_AM_JOTNAR}\n\n"
                     f"Assisted-by: Jotnar\n"
@@ -195,7 +196,7 @@ async def main() -> None:
                 fork_url=state.fork_url,
                 dist_git_branch=state.dist_git_branch,
                 update_branch=state.update_branch,
-                mr_title=f"{COMMIT_PREFIX} resolves {state.jira_issue}",
+                mr_title=f"Resolves {state.jira_issue}",
                 mr_description=(
                     f"This merge request was created {I_AM_JOTNAR}\n"
                     f"{CAREFULLY_REVIEW_CHANGES}\n\n"
