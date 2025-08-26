@@ -28,7 +28,7 @@ from observability import setup_observability
 from tools.commands import RunShellCommandTool
 from tools.specfile import AddChangelogEntryTool, BumpReleaseTool
 from tools.text import CreateTool, InsertTool, StrReplaceTool, ViewTool
-from tools.wicked_git import GitLogSearchTool, GitPatchCreationTool
+from tools.wicked_git import GitLogSearchTool, GitPatchCreationTool, GitPreparePackageSources
 from triage_agent import BackportData, ErrorData
 from utils import fix_await, check_subprocess, get_agent_execution_config, mcp_tools, redis_client
 
@@ -56,11 +56,10 @@ def render_prompt(input: InputSchema) -> str:
         'Work inside the repository cloned in "{{ local_clone }}", it is your current working directory\n'
         "Use the `git_log_search` tool in the directory {{ local_clone }} to check if the jira issue ({{ jira_issue }}) or CVE ({{ cve_id }}) is already resolved.\n"
         "If the issue or the CVE are already resolved, exit the backporting process with success=True and status=\"Backport already applied\"\n"
-        "If directory {{ unpacked_sources }} is not a git repository, run `git init` in it "
-        "and create an initial commit\n"
-        "Backport the upstream fix stored in {{ jira_issue }}.patch in the repository root. "
-        "Navigate to the directory {{ unpacked_sources }} and use `git am --reject` "
-        "command to apply the patch {{ jira_issue }}.patch\n"
+        "Use `git_prepare_package_sources` tool with argument {{ unpacked_sources }} to prepare the package sources for application of the upstream fix\n"
+        "Backport the upstream fix stored in \"{{ local_clone }}/{{ jira_issue }}.patch\". "
+        "Navigate to the directory {{ unpacked_sources }} and use `git am --reject "
+        "{{ local_clone }}/{{ jira_issue }}.patch` command to apply the patch.\n"
         "Resolve all conflicts inside {{ unpacked_sources }} directory and "
         "leave the repository in a dirty state\n"
         "Delete all *.rej files\n"
@@ -96,6 +95,7 @@ async def main() -> None:
                 GitLogSearchTool(),
                 BumpReleaseTool(),
                 AddChangelogEntryTool(),
+                GitPreparePackageSources(),
             ],
             memory=UnconstrainedMemory(),
             requirements=[

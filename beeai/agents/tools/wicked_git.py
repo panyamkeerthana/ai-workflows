@@ -9,6 +9,66 @@ from beeai_framework.tools import StringToolOutput, Tool, ToolRunOptions
 from utils import run_subprocess
 
 
+class GitPreparePackageSourcesInput(BaseModel):
+    unpacked_sources_path: str = Field(description="Absolute path to the unpacked sources which result from `centpkg prep`")
+
+
+class GitPreparePackageSources(Tool[GitPreparePackageSourcesInput, ToolRunOptions, StringToolOutput]):
+    name = "git_prepare_package_sources"
+    description = """
+    Prepares the package sources for application of the upstream fix.
+    """
+    input_schema = GitPreparePackageSourcesInput
+
+    def _create_emitter(self) -> Emitter:
+        return Emitter.root().child(
+            namespace=["tool", "git", self.name],
+            creator=self,
+        )
+
+    async def _run(
+        self, tool_input: GitPreparePackageSourcesInput, options: ToolRunOptions | None, context: RunContext
+    ) -> StringToolOutput:
+        try:
+            tool_input_path = Path(tool_input.unpacked_sources_path)
+            if not tool_input_path.exists():
+                return StringToolOutput(result=f"ERROR: provided path does not exist: {tool_input_path}")
+            if not (tool_input_path / ".git").exists():
+                # let's create it and initialize it 
+                cmd = ["git", "init"]
+                exit_code, _, stderr = await run_subprocess(cmd, cwd=tool_input_path)
+                if exit_code != 0:
+                    return StringToolOutput(result=f"ERROR: git init failed: {stderr}")
+                cmd = ["git", "add", "-A"]
+                exit_code, _, stderr = await run_subprocess(cmd, cwd=tool_input_path)
+                if exit_code != 0:
+                    return StringToolOutput(result=f"ERROR: git add failed: {stderr}")
+                cmd = ["git", "commit", "-m", "Initial commit"]
+                exit_code, _, stderr = await run_subprocess(cmd, cwd=tool_input_path)
+                if exit_code != 0:
+                    return StringToolOutput(result=f"ERROR: git commit failed: {stderr}")
+            # commit changes if the repo is dirty
+            cmd = ["git", "status", "--porcelain"]
+            exit_code, stdout, stderr = await run_subprocess(cmd, cwd=tool_input_path)
+            if exit_code != 0:
+                return StringToolOutput(result=f"ERROR: git status failed: {stderr}")
+            if stdout:
+                cmd = ["git", "add", "-A"]
+                exit_code, _, stderr = await run_subprocess(cmd, cwd=tool_input_path)
+                if exit_code != 0:
+                    return StringToolOutput(result=f"ERROR: git add failed: {stderr}")
+                cmd = ["git", "commit", "-m", "Apply %prep changes"]
+                exit_code, _, stderr = await run_subprocess(cmd, cwd=tool_input_path)
+                if exit_code != 0:
+                    return StringToolOutput(result=f"ERROR: git commit failed: {stderr}")
+            return StringToolOutput(
+                result=f"Successfully prepared the package sources at {tool_input_path}"
+                        " for application of the upstream fix")
+        except Exception as e:
+            # we absolutely need to do this otherwise the error won't appear anywhere
+            return StringToolOutput(result=f"ERROR: {e}")
+
+
 class GitPatchCreationToolInput(BaseModel):
     repository_path: str = Field(description="Absolute path to the git repository")
     patch_file_path: str = Field(description="Absolute path where the patch file should be saved")
