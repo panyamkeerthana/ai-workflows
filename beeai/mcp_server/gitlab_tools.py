@@ -1,6 +1,5 @@
 import asyncio
 import os
-from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
 
@@ -56,7 +55,7 @@ async def open_merge_request(
 
 async def push_to_remote_repository(
     repository: Annotated[str, Field(description="Repository URL")],
-    clone_path: Annotated[Path, Field(description="Absolute path to local clone of the repository")],
+    clone_path: Annotated[str, Field(description="Absolute path to local clone of the repository")],
     branch: Annotated[str, Field(description="Branch to push")],
     force: Annotated[bool, Field(description="Whether to overwrite the remote ref")] = False,
 ) -> str:
