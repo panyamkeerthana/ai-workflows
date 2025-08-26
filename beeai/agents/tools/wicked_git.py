@@ -102,6 +102,12 @@ class GitPatchCreationTool(Tool[GitPatchCreationToolInput, ToolRunOptions, Strin
             if not git_dir.exists():
                 return StringToolOutput(result=f"ERROR: Not a git repository: {tool_input_path}")
 
+            cmd = ["git", "status"]
+            exit_code, stdout, stderr = await run_subprocess(cmd, cwd=tool_input_path)
+            if "am session" not in stdout:
+                # am session is not active, we can reuse the patch file
+                return StringToolOutput(result=f"The patch applied cleanly, you can use the patch file as is.")
+
             # list all untracked files in the repository
             rej_candidates = []
             cmd = ["git", "ls-files", "--others", "--exclude-standard"]
