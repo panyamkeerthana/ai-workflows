@@ -200,8 +200,8 @@ async def main() -> None:
                 mr_description=(
                     f"This merge request was created {I_AM_JOTNAR}\n"
                     f"{CAREFULLY_REVIEW_CHANGES}\n\n"
-                    f"Upstream patch: {state.upstream_fix}\n"
-                    "Backporting steps:\n"
+                    f"Upstream patch: {state.upstream_fix}\n\n"
+                    "Backporting steps:\n\n"
                     f"{state.backport_result.status}"
                 ),
                 available_tools=gateway_tools,

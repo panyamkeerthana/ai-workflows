@@ -199,7 +199,7 @@ async def main() -> None:
                     f"This merge request was created {I_AM_JOTNAR}\n"
                     f"{CAREFULLY_REVIEW_CHANGES}\n\n"
                     f"Resolves: {state.jira_issue}\n\n"
-                    "Status of the rebase:\n"
+                    "Status of the rebase:\n\n"
                     f"{state.rebase_result.status}"
                 ),
                 available_tools=gateway_tools,
