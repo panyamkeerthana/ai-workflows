@@ -22,7 +22,7 @@ from beeai_framework.tools.think import ThinkTool
 from beeai_framework.workflows import Workflow
 
 import tasks
-from constants import COMMIT_PREFIX, I_AM_JOTNAR, CAREFULLY_REVIEW_CHANGES
+from constants import I_AM_JOTNAR, CAREFULLY_REVIEW_CHANGES
 from observability import setup_observability
 from tools.commands import RunShellCommandTool
 from tools.specfile import AddChangelogEntryTool
@@ -186,7 +186,7 @@ async def main() -> None:
                 local_clone=state.local_clone,
                 files_to_commit="*.spec",
                 commit_message=(
-                    f"{COMMIT_PREFIX} resolves {state.jira_issue}\n\n"
+                    f"Rebase to version {state.version}\n\n"
                     f"Resolves: {state.jira_issue}\n\n"
                     f"This commit was created {I_AM_JOTNAR}\n\n"
                     f"Assisted-by: Jotnar\n"
@@ -194,12 +194,12 @@ async def main() -> None:
                 fork_url=state.fork_url,
                 dist_git_branch=state.dist_git_branch,
                 update_branch=state.update_branch,
-                mr_title=f"{COMMIT_PREFIX} Update to version {state.version}",
+                mr_title=f"Update to version {state.version}",
                 mr_description=(
                     f"This merge request was created {I_AM_JOTNAR}\n"
                     f"{CAREFULLY_REVIEW_CHANGES}\n\n"
                     f"Resolves: {state.jira_issue}\n\n"
-                    "Status of the rebase:\n"
+                    "Status of the rebase:\n\n"
                     f"{state.rebase_result.status}"
                 ),
                 available_tools=gateway_tools,

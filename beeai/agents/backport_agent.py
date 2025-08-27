@@ -23,12 +23,12 @@ from beeai_framework.tools.think import ThinkTool
 from beeai_framework.workflows import Workflow
 
 import tasks
-from constants import COMMIT_PREFIX, I_AM_JOTNAR, CAREFULLY_REVIEW_CHANGES
+from constants import I_AM_JOTNAR, CAREFULLY_REVIEW_CHANGES
 from observability import setup_observability
 from tools.commands import RunShellCommandTool
 from tools.specfile import AddChangelogEntryTool, BumpReleaseTool
 from tools.text import CreateTool, InsertTool, StrReplaceTool, ViewTool
-from tools.wicked_git import GitLogSearchTool, GitPatchCreationTool
+from tools.wicked_git import GitLogSearchTool, GitPatchCreationTool, GitPreparePackageSources
 from triage_agent import BackportData, ErrorData
 from utils import fix_await, check_subprocess, get_agent_execution_config, mcp_tools, redis_client
 
@@ -54,18 +54,23 @@ class OutputSchema(BaseModel):
 def render_prompt(input: InputSchema) -> str:
     template = (
         'Work inside the repository cloned in "{{ local_clone }}", it is your current working directory\n'
-        "Use the `git_log_search` tool to check if the jira issue ({{ jira_issue }}) or CVE ({{ cve_id }}) is already resolved.\n"
-        "If the issue or the cve are already resolved, exit the backporting process with success=True and status=\"Backport already applied\"\n"
-        "If directory {{ unpacked_sources }} is not a git repository, run `git init` in it "
-        "and create an initial commit\n"
-        "Backport the upstream fix stored in {{ jira_issue }}.patch in the repository root. "
-        "Navigate to the directory {{ unpacked_sources }} and use `git am --reject` "
-        "command to apply the patch {{ jira_issue }}.patch\n"
+        "Use the `git_log_search` tool in the directory {{ local_clone }} to check if the jira issue ({{ jira_issue }}) or CVE ({{ cve_id }}) is already resolved.\n"
+        "If the issue or the CVE are already resolved, exit the backporting process with success=True and status=\"Backport already applied\"\n"
+        "Use `git_prepare_package_sources` tool with argument {{ unpacked_sources }} to prepare the package sources for application of the upstream fix\n"
+        "Backport the upstream fix stored in \"{{ local_clone }}/{{ jira_issue }}.patch\". "
+        "Navigate to the directory {{ unpacked_sources }} and use `git am --reject "
+        "{{ local_clone }}/{{ jira_issue }}.patch` command to apply the patch.\n"
         "Resolve all conflicts inside {{ unpacked_sources }} directory and "
         "leave the repository in a dirty state\n"
         "Delete all *.rej files\n"
         "DO **NOT** RUN COMMAND `git am --continue`\n"
-        "Once you resolve all conflicts, use tool git_patch_create to create a patch file\n"
+        "Once you resolve all conflicts, use tool `git_patch_create` with argument `patch_file_path` "
+        "set to \"{{ local_clone }}/{{ jira_issue }}.patch\" to update the patch file\n"
+        "Increment the 'Release' field in the {{ package }}.spec file following RPM packaging conventions "
+        "using the `bump_release` tool\n"
+        "Add a new changelog entry to the {{ package }}.spec file using the `add_changelog_entry` tool using name "
+        '"RHEL Packaging Agent <jotnar@redhat.com>"\n'
+        "Add a new `Patch` entry to the {{ package }}.spec after the last definition of `Patch` for {{ jira_issue }}.patch\n"
     )
     return PromptTemplate(PromptTemplateInput(schema=InputSchema, template=template)).render(input)
 
@@ -90,6 +95,7 @@ async def main() -> None:
                 GitLogSearchTool(),
                 BumpReleaseTool(),
                 AddChangelogEntryTool(),
+                GitPreparePackageSources(),
             ],
             memory=UnconstrainedMemory(),
             requirements=[
@@ -104,10 +110,6 @@ async def main() -> None:
                 "Ignore pre-existing rpmlint warnings unless they're related to your changes",
                 "Run `centpkg prep` to verify all patches apply cleanly during build preparation",
                 "Generate an SRPM using `centpkg srpm` command to ensure complete build readiness",
-                "Increment the 'Release' field in the .spec file following RPM packaging conventions "
-                "using the `bump_release` tool",
-                "Add a new changelog entry to the .spec file using the `add_changelog_entry` tool using name "
-                '"RHEL Packaging Agent <jotnar@redhat.com>"',
                 "* IMPORTANT: Only perform changes relevant to the backport update",
             ],
         )
@@ -184,8 +186,9 @@ async def main() -> None:
                 local_clone=state.local_clone,
                 files_to_commit=["*.spec", f"{state.jira_issue}.patch"],
                 commit_message=(
-                    f"{COMMIT_PREFIX} resolves {state.jira_issue}\n\n"
+                    f"Fix {state.jira_issue}\n\n"
                     f"{f'CVE: {state.cve_id}\n' if state.cve_id else ''}"
+                    f"{f'Upstream fix: {state.upstream_fix}\n'}"
                     f"Resolves: {state.jira_issue}\n\n"
                     f"This commit was backported {I_AM_JOTNAR}\n\n"
                     f"Assisted-by: Jotnar\n"
@@ -193,12 +196,12 @@ async def main() -> None:
                 fork_url=state.fork_url,
                 dist_git_branch=state.dist_git_branch,
                 update_branch=state.update_branch,
-                mr_title=f"{COMMIT_PREFIX} resolves {state.jira_issue}",
+                mr_title=f"Resolves {state.jira_issue}",
                 mr_description=(
                     f"This merge request was created {I_AM_JOTNAR}\n"
                     f"{CAREFULLY_REVIEW_CHANGES}\n\n"
-                    f"Upstream patch: {state.upstream_fix}\n"
-                    "Backporting steps:\n"
+                    f"Upstream patch: {state.upstream_fix}\n\n"
+                    "Backporting steps:\n\n"
                     f"{state.backport_result.status}"
                 ),
                 available_tools=gateway_tools,
