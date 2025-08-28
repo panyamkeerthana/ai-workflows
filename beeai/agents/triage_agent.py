@@ -9,6 +9,17 @@ from enum import Enum
 from typing import Union
 
 from pydantic import BaseModel, Field
+from common.models import (
+    Task,
+    TriageInputSchema as InputSchema,
+    TriageOutputSchema as OutputSchema,
+    Resolution,
+    RebaseData,
+    BackportData,
+    ClarificationNeededData,
+    NoActionData,
+    ErrorData
+)
 
 from beeai_framework.agents.experimental import RequirementAgent
 from beeai_framework.agents.experimental.requirements.conditional import (
@@ -30,7 +41,8 @@ from observability import setup_observability
 from tools.commands import RunShellCommandTool
 from tools.patch_validator import PatchValidatorTool
 from tools.version_mapper import VersionMapperTool
-from utils import fix_await, get_agent_execution_config, mcp_tools, redis_client, run_tool
+from utils import get_agent_execution_config, mcp_tools, run_tool
+from common.utils import redis_client, fix_await
 
 logger = logging.getLogger(__name__)
 
@@ -85,55 +97,7 @@ def _map_version_to_branch(version: str, needs_internal_fix: bool) -> str | None
     return branch
 
 
-class InputSchema(BaseModel):
-    issue: str = Field(description="Jira issue identifier to analyze (e.g. RHEL-12345)")
-
-
-class Resolution(Enum):
-    REBASE = "rebase"
-    BACKPORT = "backport"
-    CLARIFICATION_NEEDED = "clarification-needed"
-    NO_ACTION = "no-action"
-    ERROR = "error"
-
-
-class RebaseData(BaseModel):
-    package: str = Field(description="Package name")
-    version: str = Field(description="Target upstream package version (e.g., '2.4.1')")
-    jira_issue: str = Field(description="Jira issue identifier")
-    fix_version: str | None = Field(description="Fix version in Jira (e.g., 'rhel-9.8')", default=None)
-
-
-class BackportData(BaseModel):
-    package: str = Field(description="Package name")
-    patch_url: str = Field(description="URL or reference to the source of the fix")
-    justification: str = Field(description="Clear explanation of why this patch fixes the issue")
-    jira_issue: str = Field(description="Jira issue identifier")
-    cve_id: str = Field(description="CVE identifier")
-    fix_version: str | None = Field(description="Fix version in Jira (e.g., 'rhel-9.8')", default=None)
-
-
-class ClarificationNeededData(BaseModel):
-    findings: str = Field(description="Summary of the investigation")
-    additional_info_needed: str = Field(description="Summary of missing information")
-    jira_issue: str = Field(description="Jira issue identifier")
-
-
-class NoActionData(BaseModel):
-    reasoning: str = Field(description="Reason why the issue is intentionally non-actionable")
-    jira_issue: str = Field(description="Jira issue identifier")
-
-
-class ErrorData(BaseModel):
-    details: str = Field(description="Specific details about an error")
-    jira_issue: str = Field(description="Jira issue identifier")
-
-
-class OutputSchema(BaseModel):
-    resolution: Resolution = Field(description="Triage resolution")
-    data: Union[RebaseData, BackportData, ClarificationNeededData, NoActionData, ErrorData] = Field(
-        description="Associated data"
-    )
+# All schemas are now imported from common.models
 
 
 def render_prompt(input: InputSchema) -> str:
@@ -438,10 +402,6 @@ async def main() -> None:
             if state.target_branch:
                 logger.info(f"Target branch: {state.target_branch}")
             return
-
-        class Task(BaseModel):
-            metadata: dict = Field(description="Task metadata")
-            attempts: int = Field(default=0, description="Number of processing attempts")
 
         logger.info("Starting triage agent in queue mode")
         async with redis_client(os.environ["REDIS_URL"]) as redis:

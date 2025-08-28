@@ -57,6 +57,9 @@ run-jira-issue-fetcher:
 		echo "Then edit it with your credentials"; \
 		exit 1; \
 	fi
+	@echo "Ensuring Redis is available (don't use depends_on otherwise it will kill agents already running)..."
+	@$(COMPOSE) -f $(COMPOSE_FILE) up -d valkey || true  # Don't fail if valkey is already running
+	@echo "Running jira-issue-fetcher..."
 	$(COMPOSE) -f $(COMPOSE_FILE) --profile manual run --rm jira-issue-fetcher
 
 .PHONY: build-jira-issue-fetcher

@@ -95,8 +95,8 @@ services:
     command: ["python", "agents/rebase_agent.py"]
 
   jira-issue-fetcher:
-    depends_on:
-      - valkey
+    # No hard dependencies - will connect to existing services or fail gracefully
+    # otherwise it will kill agents already running
     image: jira-issue-fetcher
     build:
       context: .
