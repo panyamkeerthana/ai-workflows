@@ -38,3 +38,11 @@
 - Run `make deploy`. This would apply all the existing configurations to the project.
 
 - Run `oc get route phoenix` and verify url listed in `HOST/PORT` column is accessible.
+
+## Jira Issue Fetcher Deployment
+
+Manually run jira issue fetcher:
+
+```bash
+make run-jira-fetcher
+```
