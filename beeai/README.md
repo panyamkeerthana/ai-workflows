@@ -58,33 +58,33 @@ The `jotnar_fusa` label will be automatically added by the triage agent to JIRA 
 ```mermaid
 flowchart TD
     Start["JIRA Issue<br/>(New, no jotnar_* labels)"] --> Triage["Triage Agent"]
-    
+
     Triage --> |"REBASE"| RebaseQ["rebase_queue<br/>+ jotnar_rebase_in_progress<br/>(+ jotnar_fusa if FuSa pkg)"]
     Triage --> |"BACKPORT"| BackportQ["backport_queue<br/>+ jotnar_backport_in_progress<br/>(+ jotnar_fusa if FuSa pkg)"]
     Triage --> |"CLARIFICATION_NEEDED"| ClarQ["clarification_needed_queue<br/>+ jotnar_needs_attention<br/>(+ jotnar_fusa if FuSa pkg)"]
     Triage --> |"NO_ACTION"| NoAction["no_action_list<br/>+ jotnar_no_action_needed<br/>(or jotnar_cant_do manually)"]
     Triage --> |"ERROR"| ErrorList["error_list<br/>+ jotnar_errored"]
-    
+
     RebaseQ --> RebaseAgent["Rebase Agent"]
     RebaseAgent --> |"Success"| RebaseSuccess["completed_rebase_list<br/>+ jotnar_rebased"]
     RebaseAgent --> |"Failure"| ErrorList
     RebaseAgent --> |"Retry"| RebaseQ
-    
+
     BackportQ --> BackportAgent["Backport Agent"]
     BackportAgent --> |"Success"| BackportSuccess["completed_backport_list<br/>+ jotnar_backported"]
     BackportAgent --> |"Failure"| ErrorList
     BackportAgent --> |"Retry"| BackportQ
-    
+
     %% Re-triggering mechanisms
     Retrigger1["Remove any jotnar_* label"] -.-> |"Re-enters system"| Start
     Retrigger2["Add jotnar_retry_needed label"] -.-> |"Re-enters system"| Start
-    
+
     %% Manual review option
     ManualReview["Manual Review<br/>+ jotnar_needs_maintainer_review"]
     RebaseSuccess -.-> ManualReview
     BackportSuccess -.-> ManualReview
     ClarQ -.-> ManualReview
-    
+
     style Start fill:#e1f5fe
     style Triage fill:#f3e5f5
     style RebaseAgent fill:#f3e5f5
@@ -128,6 +128,33 @@ make JIRA_ISSUE=RHEL-12345 run-triage-agent-standalone
 make PACKAGE=httpd VERSION=2.4.62 JIRA_ISSUE=RHEL-12345 BRANCH=c10s run-rebase-agent-standalone
 make PACKAGE=httpd UPSTREAM_FIX=https://github.com/... JIRA_ISSUE=RHEL-12345 BRANCH=c10s run-backport-agent-standalone
 ```
+
+## Jira Issue Fetcher
+
+The Jira Issue Fetcher automatically fetches issues from Jira and adds them to the triage queue. It runs as a standalone service.
+
+**Setup:**
+```bash
+# Copy the environment template
+cp templates/jira-issue-fetcher.env .secrets/jira-issue-fetcher.env
+
+# Edit with your credentials
+vim .secrets/jira-issue-fetcher.env
+```
+
+**Running:**
+```bash
+# Build the issue fetcher image
+make build-jira-issue-fetcher
+
+# Run the fetcher once (includes validation checks)
+make run-jira-issue-fetcher
+
+# View logs if running in background
+make logs-jira-fetcher
+```
+
+The fetcher will automatically fetch issues based on the configured JQL query and push them to the triage queue for processing.
 
 ## Dry-Run mode
 

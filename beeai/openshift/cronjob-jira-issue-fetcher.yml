@@ -1,0 +1,80 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: jira-issue-fetcher
+  labels:
+    app: jira-issue-fetcher
+    component: scheduler
+spec:
+  schedule: "*/30 * * * *"  # Every 30 minutes
+  concurrencyPolicy: Forbid  # Prevent overlapping runs
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  suspend: false
+  jobTemplate:
+    metadata:
+      labels:
+        app: jira-issue-fetcher
+        component: job
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800  # 30 minutes max runtime
+      template:
+        metadata:
+          labels:
+            app: jira-issue-fetcher
+            component: pod
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: jira-issue-fetcher
+            image: 'jira-issue-fetcher:prod'
+            imagePullPolicy: Always
+            env:
+            - name: JIRA_URL
+              valueFrom:
+                secretKeyRef:
+                  key: JIRA_URL
+                  name: mcp-atlassian-secret
+            - name: JIRA_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: JIRA_PERSONAL_TOKEN
+                  name: mcp-atlassian-secret
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: REDIS_URL
+                  name: x-beeai-agent-configmap
+            - name: QUERY
+              valueFrom:
+                configMapKeyRef:
+                  key: QUERY
+                  name: jira-issue-fetcher
+            - name: LOGLEVEL
+              valueFrom:
+                configMapKeyRef:
+                  key: LOGLEVEL
+                  name: jira-issue-fetcher
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+            securityContext:
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+              capabilities:
+                drop:
+                - ALL
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          dnsPolicy: ClusterFirst
+          schedulerName: default-scheduler
+          terminationGracePeriodSeconds: 30

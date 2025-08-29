@@ -1,0 +1,28 @@
+FROM fedora:42
+
+# Install minimal system dependencies for the issue fetcher
+RUN dnf -y install \
+      python3 \
+      python3-pip \
+      python3-requests \
+      python3-redis \
+      python3-backoff \
+      python3-pydantic \
+    && dnf clean all
+
+# Create user
+RUN useradd -m -G wheel issuebot
+
+# Create working directory
+WORKDIR /home/issuebot
+
+# Copy issue fetcher script and shared common module
+COPY issue_fetcher/jira_issue_fetcher.py /home/issuebot/
+COPY common/ /home/issuebot/common/
+
+# Set proper permissions
+RUN chgrp -R root /home/issuebot && chmod -R g+rwX /home/issuebot
+
+USER issuebot
+
+CMD ["python3", "jira_issue_fetcher.py"]
