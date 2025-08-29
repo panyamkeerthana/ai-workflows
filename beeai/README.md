@@ -151,7 +151,7 @@ make build-jira-issue-fetcher
 make run-jira-issue-fetcher
 
 # View logs if running in background
-make logs-jira-fetcher
+make logs-jira-issue-fetcher
 ```
 
 The fetcher will automatically fetch issues based on the configured JQL query and push them to the triage queue for processing.

@@ -97,8 +97,8 @@ logs-backport:
 logs-rebase:
 	$(COMPOSE) -f $(COMPOSE_FILE) logs -f rebase-agent
 
-.PHONY: logs-jira-fetcher
-logs-jira-fetcher:
+.PHONY: logs-jira-issue-fetcher
+logs-jira-issue-fetcher:
 	$(COMPOSE) -f $(COMPOSE_FILE) --profile manual logs -f jira-issue-fetcher
 
 .PHONY: status
