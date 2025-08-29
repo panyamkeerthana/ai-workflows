@@ -56,7 +56,9 @@ spec:
                 configMapKeyRef:
                   key: LOGLEVEL
                   name: jira-issue-fetcher
-            # TODO: add limits on cpu and memory.
+            resources:
+              limits:
+                cpu: "200m"
             securityContext:
               allowPrivilegeEscalation: false
               runAsNonRoot: true
