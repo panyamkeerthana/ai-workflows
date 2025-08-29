@@ -62,3 +62,18 @@ jobs:
           dockerfile: "testing-farm-sse-bridge/Containerfile"
           docker_context: "testing-farm-sse-bridge/"
           image_name: "testing-farm-sse-bridge"
+
+  build-and-push-jira-issue-fetcher:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build and push jira-issue-fetcher to quay.io registry
+        uses: sclorg/build-and-push-action@v4
+        with:
+          registry: "quay.io"
+          registry_namespace: "jotnar"
+          registry_username: ${{ secrets.REGISTRY_LOGIN }}
+          registry_token: ${{ secrets.REGISTRY_TOKEN }}
+          dockerfile: "beeai/Containerfile.jira-issue-fetcher"
+          docker_context: "beeai/"
+          image_name: "jira-issue-fetcher"
+          # tag: "staging"
