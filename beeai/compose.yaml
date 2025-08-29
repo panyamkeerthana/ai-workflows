@@ -100,7 +100,7 @@ services:
     image: jira-issue-fetcher
     build:
       context: .
-      dockerfile: Containerfile.issue-fetcher
+      dockerfile: Containerfile.jira-issue-fetcher
     environment:
       - REDIS_URL=redis://valkey:6379/0
     env_file:

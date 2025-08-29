@@ -17,7 +17,7 @@ RUN useradd -m -G wheel issuebot
 WORKDIR /home/issuebot
 
 # Copy issue fetcher script and shared common module
-COPY issue_fetcher/jira_issue_fetcher.py /home/issuebot/
+COPY jira_issue_fetcher/jira_issue_fetcher.py /home/issuebot/
 COPY common/ /home/issuebot/common/
 
 # Set proper permissions

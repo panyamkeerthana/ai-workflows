@@ -44,5 +44,5 @@
 Manually run jira issue fetcher:
 
 ```bash
-make run-jira-fetcher
+make run-jira-issue-fetcher
 ```
