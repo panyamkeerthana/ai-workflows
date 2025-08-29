@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from typing import Annotated
 from urllib.parse import urlparse
@@ -6,6 +7,9 @@ from urllib.parse import urlparse
 from ogr.factory import get_project
 from ogr.exceptions import OgrException
 from pydantic import Field
+
+
+logger = logging.getLogger(__name__)
 
 
 async def fork_repository(
@@ -47,9 +51,8 @@ async def open_merge_request(
     try:
         await asyncio.to_thread(pr.add_label, "jotnar_needs_attention")
     except OgrException as ex:
-        # TODO: log the error here
+        logger.error("Unable to set label 'jotnar_needs_attention' on MR %s", pr, exc_info=True)
         # we should still continue and return the MR URL
-        pass
     return pr.url
 
 
