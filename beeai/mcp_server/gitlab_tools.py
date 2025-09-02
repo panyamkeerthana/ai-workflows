@@ -69,9 +69,11 @@ async def open_merge_request(
         return "Failed to open the merge request"
     # by default, set this label on a newly created MR so we can inspect it ASAP
     try:
+        # Add a short delay before adding the label to avoid race conditions with MR creation
+        await asyncio.sleep(0.5)
         await asyncio.to_thread(pr.add_label, "jotnar_needs_attention")
     except OgrException as ex:
-        logger.error("Unable to set label 'jotnar_needs_attention' on MR %s", pr, exc_info=True)
+        logger.error("Unable to set label 'jotnar_needs_attention' on MR %s (%s)", pr, ex)
         # we should still continue and return the MR URL
     return pr.url
 
