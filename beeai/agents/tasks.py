@@ -8,7 +8,7 @@ from typing import Tuple
 from beeai_framework.tools import Tool
 
 from common.utils import is_cs_branch
-from constants import BRANCH_PREFIX, JIRA_COMMENT_TEMPLATE, JiraLabels
+from constants import BRANCH_PREFIX, JIRA_COMMENT_TEMPLATE
 from utils import check_subprocess, run_subprocess, run_tool, mcp_tools
 
 logger = logging.getLogger(__name__)

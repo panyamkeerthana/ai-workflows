@@ -38,7 +38,7 @@ from common.models import (
     CVEEligibilityResult,
 )
 from common.utils import redis_client, fix_await
-from constants import JiraLabels
+from common.constants import JiraLabels, RedisQueues
 from observability import setup_observability
 from tools.commands import RunShellCommandTool
 from tools.patch_validator import PatchValidatorTool
@@ -451,7 +451,7 @@ async def main() -> None:
 
         while True:
             logger.info("Waiting for tasks from triage_queue (timeout: 30s)...")
-            element = await fix_await(redis.brpop(["triage_queue"], timeout=30))
+            element = await fix_await(redis.brpop([RedisQueues.TRIAGE_QUEUE.value], timeout=30))
             if element is None:
                 logger.info("No tasks received, continuing to wait...")
                 continue
@@ -470,7 +470,7 @@ async def main() -> None:
                         f"Task failed (attempt {task.attempts}/{max_retries}), "
                         f"re-queuing for retry: {input.issue}"
                     )
-                    await fix_await(redis.lpush("triage_queue", task.model_dump_json()))
+                    await fix_await(redis.lpush(RedisQueues.TRIAGE_QUEUE.value, task.model_dump_json()))
                 else:
                     logger.error(
                         f"Task failed after {max_retries} attempts, " f"moving to error list: {input.issue}"
@@ -480,7 +480,7 @@ async def main() -> None:
                         labels_to_add=[JiraLabels.TRIAGE_ERRORED.value],
                         dry_run=dry_run
                     )
-                    await fix_await(redis.lpush("error_list", error))
+                    await fix_await(redis.lpush(RedisQueues.ERROR_LIST.value, error))
 
             try:
                 await tasks.set_jira_labels(
@@ -514,7 +514,7 @@ async def main() -> None:
                         dry_run=dry_run
                     )
                     task = Task(metadata=state.model_dump())
-                    await redis.lpush("rebase_queue", task.model_dump_json())
+                    await redis.lpush(RedisQueues.REBASE_QUEUE.value, task.model_dump_json())
                 elif output.resolution == Resolution.BACKPORT:
                     logger.info(f"Triage resolved as BACKPORT for {input.issue}, " f"adding to backport queue")
                     await tasks.set_jira_labels(
@@ -523,7 +523,7 @@ async def main() -> None:
                         dry_run=dry_run
                     )
                     task = Task(metadata=state.model_dump())
-                    await redis.lpush("backport_queue", task.model_dump_json())
+                    await redis.lpush(RedisQueues.BACKPORT_QUEUE.value, task.model_dump_json())
                 elif output.resolution == Resolution.CLARIFICATION_NEEDED:
                     logger.info(
                         f"Triage resolved as CLARIFICATION_NEEDED for {input.issue}, "
@@ -535,7 +535,7 @@ async def main() -> None:
                         dry_run=dry_run
                     )
                     task = Task(metadata=state.model_dump())
-                    await redis.lpush("clarification_needed_queue", task.model_dump_json())
+                    await redis.lpush(RedisQueues.CLARIFICATION_NEEDED_QUEUE.value, task.model_dump_json())
                 elif output.resolution == Resolution.NO_ACTION:
                     logger.info(f"Triage resolved as NO_ACTION for {input.issue}, " f"adding to no action list")
                     await tasks.set_jira_labels(
@@ -543,7 +543,7 @@ async def main() -> None:
                         labels_to_add=[JiraLabels.NO_ACTION_NEEDED.value],
                         dry_run=dry_run
                     )
-                    await fix_await(redis.lpush("no_action_list", output.data.model_dump_json()))
+                    await fix_await(redis.lpush(RedisQueues.NO_ACTION_LIST.value, output.data.model_dump_json()))
                 elif output.resolution == Resolution.ERROR:
                     logger.warning(f"Triage resolved as ERROR for {input.issue}, retrying")
                     await tasks.set_jira_labels(
