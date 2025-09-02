@@ -19,12 +19,12 @@ class RedisQueues(Enum):
     @classmethod
     def input_queues(cls) -> set[str]:
         """Return input queue names that contain Task objects with metadata"""
-        return {cls.TRIAGE_QUEUE.value, cls.REBASE_QUEUE.value, cls.BACKPORT_QUEUE.value}
+        return {cls.TRIAGE_QUEUE.value, cls.REBASE_QUEUE.value, cls.BACKPORT_QUEUE.value, cls.CLARIFICATION_NEEDED_QUEUE.value}
 
     @classmethod
     def data_queues(cls) -> set[str]:
         """Return data queue names that contain schema objects"""
-        return {cls.CLARIFICATION_NEEDED_QUEUE.value, cls.ERROR_LIST.value,
+        return {cls.ERROR_LIST.value,
                 cls.NO_ACTION_LIST.value, cls.COMPLETED_REBASE_LIST.value,
                 cls.COMPLETED_BACKPORT_LIST.value}
 

@@ -204,38 +204,35 @@ class JiraIssueFetcher:
                             if queue_name in RedisQueues.input_queues():
                                 task = Task.model_validate_json(item)
                                 if task.metadata:
-                                    if queue_name == RedisQueues.TRIAGE_QUEUE.value:
-                                        schema = TriageInputSchema.model_validate(task.metadata)
-                                        issue_key = schema.issue.upper()
-                                    elif queue_name == RedisQueues.REBASE_QUEUE.value:
-                                        schema = RebaseInputSchema.model_validate(task.metadata)
-                                        issue_key = schema.jira_issue.upper()
-                                    elif queue_name == RedisQueues.BACKPORT_QUEUE.value:
-                                        schema = BackportInputSchema.model_validate(task.metadata)
-                                        issue_key = schema.jira_issue.upper()
+                                    match queue_name:
+                                        case RedisQueues.TRIAGE_QUEUE.value:
+                                            schema = TriageInputSchema.model_validate(task.metadata)
+                                            issue_key = schema.issue.upper()
+                                        case RedisQueues.REBASE_QUEUE.value | RedisQueues.BACKPORT_QUEUE.value | RedisQueues.CLARIFICATION_NEEDED_QUEUE.value:
+                                            issue_key = task.metadata.get("jira_issue", "").upper()
+                                        case _:
+                                            continue
 
                             # For result/data queues, parse the data directly
                             else:
                                 try:
-                                    if queue_name in [RedisQueues.COMPLETED_REBASE_LIST.value]:
-                                        schema = RebaseOutputSchema.model_validate_json(item)
-                                        # Output schemas don't have issue keys, skip these
-                                        # hopefully we get it from the jira labels query
-                                        continue
-                                    elif queue_name in [RedisQueues.COMPLETED_BACKPORT_LIST.value]:
-                                        schema = BackportOutputSchema.model_validate_json(item)
-                                        # Output schemas don't have issue keys, skip these
-                                        # hopefully we get it from the jira labels query
-                                        continue
-                                    elif queue_name in [RedisQueues.CLARIFICATION_NEEDED_QUEUE.value]:
-                                        schema = ClarificationNeededData.model_validate_json(item)
-                                        issue_key = schema.jira_issue.upper()
-                                    elif queue_name in [RedisQueues.NO_ACTION_LIST.value]:
-                                        schema = NoActionData.model_validate_json(item)
-                                        issue_key = schema.jira_issue.upper()
-                                    elif queue_name in [RedisQueues.ERROR_LIST.value]:
-                                        schema = ErrorData.model_validate_json(item)
-                                        issue_key = schema.jira_issue.upper()
+                                    match queue_name:
+                                        case RedisQueues.COMPLETED_REBASE_LIST.value:
+                                            schema = RebaseOutputSchema.model_validate_json(item)
+                                            # Schema doesn't have issue keys, skip these
+                                            continue
+                                        case RedisQueues.COMPLETED_BACKPORT_LIST.value:
+                                            schema = BackportOutputSchema.model_validate_json(item)
+                                            # Schema doesn't have issue keys, skip these
+                                            continue
+                                        case RedisQueues.NO_ACTION_LIST.value:
+                                            schema = NoActionData.model_validate_json(item)
+                                            issue_key = schema.jira_issue.upper()
+                                        case RedisQueues.ERROR_LIST.value:
+                                            schema = ErrorData.model_validate_json(item)
+                                            issue_key = schema.jira_issue.upper()
+                                        case _:
+                                            continue
                                 except ValueError:
                                     # Fallback to task parsing for these queues if direct parsing fails
                                     task = Task.model_validate_json(item)
@@ -293,10 +290,8 @@ class JiraIssueFetcher:
                         logger.info(f"Issue {issue_key} has jotnar_retry_needed label - marking for retry")
                         remove_issues_for_retry.add(issue_key)
                     elif not jotnar_labels:
-                        # TODO: uncomment this when we have implemented applying the labels to the issues in all the agents
-                        # logger.info(f"Issue {issue_key} has no jötnar labels - marking for retry")
-                        # remove_issues_for_retry.add(issue_key)
-                        pass
+                        logger.info(f"Issue {issue_key} has no jötnar labels - marking for retry")
+                        remove_issues_for_retry.add(issue_key)
 
             pushed_count = 0
             skipped_count = 0
