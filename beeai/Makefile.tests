@@ -7,7 +7,9 @@ CONTAINER_ENGINE ?= $(shell command -v podman 2>/dev/null || echo "docker")
 build-test-image:
 	$(CONTAINER_ENGINE) build --rm --tag $(TEST_IMAGE) -f Containerfile.tests
 
-.PHONY: check check-agents check-mcp-server check-in-container
+.PHONY: check check-agents check-mcp-server check-in-container \
+	check-agents-in-container check-mcp-server-in-container check-jira-issue-fetcher-in-container
+
 check-agents:
 	cd ./agents && \
 	PYTHONPATH=$(CURDIR) PYTHONDONTWRITEBYTECODE=1 python3 -m pytest --verbose --showlocals $(TEST_TARGET)

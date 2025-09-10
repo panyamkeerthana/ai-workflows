@@ -16,6 +16,7 @@ jobs:
         include:
           - target: check-agents-in-container
           - target: check-mcp-server-in-container
+          - target: check-jira-issue-fetcher-in-container
     steps:
     - name: Checkout code
       uses: actions/checkout@v4

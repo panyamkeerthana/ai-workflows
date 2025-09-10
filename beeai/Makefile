@@ -135,3 +135,5 @@ check-agents-in-container:
 	$(MAKE) -f Makefile.tests check-agents-in-container
 check-mcp-server-in-container:
 	$(MAKE) -f Makefile.tests check-mcp-server-in-container
+check-jira-issue-fetcher-in-container:
+	$(MAKE) -f Makefile.tests check-jira-issue-fetcher-in-container
