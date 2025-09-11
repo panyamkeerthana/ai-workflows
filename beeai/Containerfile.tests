@@ -11,10 +11,16 @@ RUN dnf -y install \
       python3-pytest \
       python3-pytest-asyncio \
       python3-specfile \
+      python3-redis \
+      python3-requests \
+      python3-backoff \
     && dnf clean all
 
 RUN git config --global user.email "jotnar-tests@example.com" \
       && git config --global user.name "Jotnar Tests"
+
+# Set PYTHONPATH so agents module can be imported
+ENV PYTHONPATH=/src:$PYTHONPATH
 
 # Install BeeAI Framework and FastMCP
 RUN pip3 install --no-cache-dir beeai-framework fastmcp redis
