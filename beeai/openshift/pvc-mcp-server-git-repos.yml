@@ -7,6 +7,6 @@ spec:
   - ReadWriteOnce
   resources:
     requests:
-      storage: 2Gi
+      storage: 6Gi
   storageClassName: gp3-csi
   volumeMode: Filesystem
