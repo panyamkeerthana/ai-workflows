@@ -74,6 +74,7 @@ class JiraLabels(Enum):
     BACKPORT_FAILED = "jotnar_backport_failed"
 
     RETRY_NEEDED = "jotnar_retry_needed"
+    FUSA = "jotnar_fusa"
 
     @classmethod
     def all_labels(cls) -> set[str]:

@@ -10,8 +10,7 @@ import pytest
 from flexmock import flexmock
 from ogr.services.gitlab import GitlabService
 
-from gitlab_tools import clone_and_update_fork, fork_repository, open_merge_request, push_to_remote_repository
-
+from gitlab_tools import clone_and_update_fork, fork_repository, open_merge_request, push_to_remote_repository, add_merge_request_labels
 
 @pytest.mark.parametrize(
     "repository",
@@ -166,3 +165,50 @@ async def test_push_to_remote_repository():
     flexmock(asyncio).should_receive("create_subprocess_exec").replace_with(create_subprocess_exec)
     result = await push_to_remote_repository(repository=repository, clone_path=clone_path, branch=branch)
     assert result.startswith("Successfully")
+
+
+@pytest.mark.parametrize(
+    "merge_request_url,expected_project_path",
+    [
+        ("https://gitlab.com/redhat/rhel/rpms/bash/-/merge_requests/123", "redhat/rhel/rpms/bash"),
+        ("https://gitlab.com/packit-service/hello-world/-/merge_requests/123", "packit-service/hello-world"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_add_merge_request_labels(merge_request_url, expected_project_path):
+    labels = ["jotnar_fusa", "test-label"]
+
+    # Mock the merge request object
+    mr_mock = flexmock()
+    mr_mock.should_receive("add_label").with_args("jotnar_fusa").once()
+    mr_mock.should_receive("add_label").with_args("test-label").once()
+
+    # Mock the project object
+    project_mock = flexmock()
+    project_mock.should_receive("get_pr").and_return(mr_mock)
+
+    # Mock GitlabService.get_project_from_url
+    flexmock(GitlabService).should_receive("get_project_from_url").with_args(
+        url=f"https://gitlab.com/{expected_project_path}"
+    ).and_return(project_mock)
+
+    result = await add_merge_request_labels(
+        merge_request_url=merge_request_url,
+        labels=labels
+    )
+
+    assert result == f"Successfully added labels {labels} to merge request {merge_request_url}"
+
+
+@pytest.mark.asyncio
+async def test_add_merge_request_labels_invalid_url():
+    merge_request_url = "https://github.com/user/repo/pull/123"
+    labels = ["test-label"]
+
+    with pytest.raises(Exception) as exc_info:
+        await add_merge_request_labels(
+            merge_request_url=merge_request_url,
+            labels=labels
+        )
+
+    assert "Could not parse merge request URL" in str(exc_info.value)
