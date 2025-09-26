@@ -53,7 +53,7 @@ class PackageUpdateStep():
 
       # Only add FuSa labels for c9s or rhel9-[1-10] branches
       is_fusa_branch = (target_branch == "c9s" or
-                      re.match(r"^rhel-9.([0-9]|10).0$", target_branch))
+                      re.match(r"^rhel-9\.([0-9]|10)\.0$", target_branch))
       if not is_fusa_branch:
           logger.info(f"Skipping FuSa label for non-FuSa branch: {target_branch}")
           return next_step

@@ -223,7 +223,7 @@ async def add_merge_request_labels(
     # URL format examples:
     # `https://gitlab.com/namespace/project/-/merge_requests/123`
     # `https://gitlab.com/redhat/rhel/rpms/package/-/merge_requests/123`
-    match = re.search(r'gitlab\.com/([^/]+/[^/]+)/-/merge_requests/(\d+)', merge_request_url)
+    match = re.search(r'gitlab\.com/([^/]+(?:/[^/]+){1,3})/-/merge_requests/(\d+)', merge_request_url)
     if not match:
         raise ToolError(f"Could not parse merge request URL: {merge_request_url}")
 
@@ -232,7 +232,7 @@ async def add_merge_request_labels(
 
     project = await asyncio.to_thread(get_project, url=f"https://gitlab.com/{project_path}", token=os.getenv("GITLAB_TOKEN"))
     if not project:
-        raise ToolError(f"Failed to get project: {project_path}")
+        raise ToolError(f"Failed to get project: https://gitlab.com/{project_path}")
 
     try:
         mr = await asyncio.to_thread(project.get_pr, mr_id)
