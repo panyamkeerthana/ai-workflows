@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
@@ -209,3 +210,34 @@ async def push_to_remote_repository(
     if await proc.wait():
         raise ToolError("Failed to push to the specified repository")
     return f"Successfully pushed the specified branch to {repository}"
+
+
+async def add_merge_request_labels(
+    merge_request_url: Annotated[str, Field(description="URL of the merge request")],
+    labels: Annotated[list[str], Field(description="List of labels to add to the merge request")],
+) -> str:
+    """
+    Adds labels to an existing merge request.
+    """
+    # Extract project and MR ID from the URL
+    # URL format examples:
+    # `https://gitlab.com/namespace/project/-/merge_requests/123`
+    # `https://gitlab.com/redhat/rhel/rpms/package/-/merge_requests/123`
+    match = re.search(r'gitlab\.com/([^/]+/[^/]+)/-/merge_requests/(\d+)', merge_request_url)
+    if not match:
+        raise ToolError(f"Could not parse merge request URL: {merge_request_url}")
+
+    project_path = match.group(1)
+    mr_id = int(match.group(2))
+
+    project = await asyncio.to_thread(get_project, url=f"https://gitlab.com/{project_path}", token=os.getenv("GITLAB_TOKEN"))
+    if not project:
+        raise ToolError(f"Failed to get project: {project_path}")
+
+    try:
+        mr = await asyncio.to_thread(project.get_pr, mr_id)
+        for label in labels:
+            await asyncio.to_thread(mr.add_label, label)
+        return f"Successfully added labels {labels} to merge request {merge_request_url}"
+    except Exception as e:
+        raise ToolError(f"Failed to add labels to merge request: {e}")

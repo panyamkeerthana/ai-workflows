@@ -3,6 +3,7 @@ import copy
 import logging
 import os
 import sys
+import re
 import traceback
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,7 @@ from beeai_framework.workflows import Workflow
 import tasks
 from agents.build_agent import create_build_agent, get_prompt as get_build_prompt
 from agents.log_agent import create_log_agent, get_prompt as get_log_prompt
+from common.config import load_rhel_config
 from common.constants import JiraLabels, RedisQueues
 from common.models import (
     BackportInputSchema,
@@ -344,6 +346,49 @@ async def main() -> None:
                     state.merge_request_url = None
                     state.backport_result.success = False
                     state.backport_result.error = f"Could not commit and open MR: {e}"
+                return "add_fusa_label"
+
+            async def add_fusa_label(state):
+                target_branch = state.dist_git_branch
+
+                config = await load_rhel_config()
+                fusa_packages = config.get("fusa_packages", [])
+
+                is_fusa_package = state.package in fusa_packages
+                if not is_fusa_package:
+                    logger.info(f"Skipping FuSa label for non-FuSa package: {state.package}")
+                    return "comment_in_jira"
+
+                # Only add FuSa labels for c9s or rhel9-[1-10] branches
+                is_fusa_branch = (target_branch == "c9s" or
+                                re.match(r"^rhel-9.([0-9]|10).0$", target_branch))
+                if not is_fusa_branch:
+                    logger.info(f"Skipping FuSa label for non-FuSa branch: {target_branch}")
+                    return "comment_in_jira"
+
+                if dry_run:
+                    logger.info(f"Skipping FuSa label for FuSa package: {state.package}, FuSa branch: {target_branch}, because running in dry-run mode")
+                    return "comment_in_jira"
+
+                # Add FuSa label to Jira
+                await tasks.set_jira_labels(
+                    jira_issue=state.jira_issue,
+                    labels_to_add=[JiraLabels.FUSA.value],
+                    dry_run=dry_run
+                )
+
+                # Add FuSa label to GitLab merge request if it exists
+                if state.merge_request_url:
+                    try:
+                        await tasks.run_tool(
+                            "add_merge_request_labels",
+                            merge_request_url=state.merge_request_url,
+                            labels=[JiraLabels.FUSA.value],
+                            available_tools=gateway_tools,
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to add FuSa label to GitLab MR: {e}")
+
                 return "comment_in_jira"
 
             async def comment_in_jira(state):
@@ -368,6 +413,7 @@ async def main() -> None:
             workflow.add_step("stage_changes", stage_changes)
             workflow.add_step("run_log_agent", run_log_agent)
             workflow.add_step("commit_push_and_open_mr", commit_push_and_open_mr)
+            workflow.add_step("add_fusa_label", add_fusa_label)
             workflow.add_step("comment_in_jira", comment_in_jira)
 
             response = await workflow.run(
