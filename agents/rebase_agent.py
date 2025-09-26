@@ -25,6 +25,7 @@ from beeai_framework.workflows import Workflow
 import tasks
 from agents.build_agent import create_build_agent, get_prompt as get_build_prompt
 from agents.log_agent import create_log_agent, get_prompt as get_log_prompt
+from agents.package_update_steps import PackageUpdateStep, PackageUpdateState
 from common.config import get_package_instructions
 from common.constants import JiraLabels, RedisQueues
 from common.models import (
@@ -166,21 +167,11 @@ async def main() -> None:
 
     local_tool_options = {"working_directory": None}
 
-    class State(BaseModel):
-        jira_issue: str
-        package: str
-        dist_git_branch: str
+    class State(PackageUpdateState):
         version: str
-        local_clone: Path | None = Field(default=None)
-        fedora_clone: Path | None = Field(default=None)
-        update_branch: str | None = Field(default=None)
-        fork_url: str | None = Field(default=None)
-        attempts_remaining: int = Field(default=max_build_attempts)
         rebase_log: list[str] = Field(default=[])
-        build_error: str | None = Field(default=None)
         rebase_result: RebaseOutputSchema | None = Field(default=None)
-        log_result: LogOutputSchema | None = Field(default=None)
-        merge_request_url: str | None = Field(default=None)
+        attempts_remaining: int = Field(default=max_build_attempts)
         all_files_git_to_add: set[str] = Field(default_factory=set)
 
     async def run_workflow(package, dist_git_branch, version, jira_issue):
@@ -336,7 +327,10 @@ async def main() -> None:
                     state.merge_request_url = None
                     state.rebase_result.success = False
                     state.rebase_result.error = f"Could not commit and open MR: {e}"
-                return "comment_in_jira"
+                return "add_fusa_label"
+
+            async def add_fusa_label(state):
+                return await PackageUpdateStep.add_fusa_label(state, "comment_in_jira", dry_run=dry_run, gateway_tools=gateway_tools)
 
             async def comment_in_jira(state):
                 if dry_run:
@@ -360,6 +354,7 @@ async def main() -> None:
             workflow.add_step("stage_changes", stage_changes)
             workflow.add_step("run_log_agent", run_log_agent)
             workflow.add_step("commit_push_and_open_mr", commit_push_and_open_mr)
+            workflow.add_step("add_fusa_label", add_fusa_label)
             workflow.add_step("comment_in_jira", comment_in_jira)
 
             response = await workflow.run(
