@@ -1,16 +1,20 @@
 import asyncio
-from pathlib import Path
-
 import git
 import gitlab
+import pytest
+
+from pathlib import Path
+
 from ogr.abstract import PRStatus
 from ogr.exceptions import GitlabAPIException
 from ogr.services.gitlab.project import GitlabProject
-import pytest
 from flexmock import flexmock
 from ogr.services.gitlab import GitlabService
 
 from gitlab_tools import clone_and_update_fork, fork_repository, open_merge_request, push_to_remote_repository, add_merge_request_labels
+from test_utils import mock_git_repo_basepath
+
+
 
 @pytest.mark.parametrize(
     "repository",
@@ -118,7 +122,7 @@ async def test_open_merge_request_with_existing_mr():
 
 
 @pytest.mark.asyncio
-async def test_clone_and_update_fork():
+async def test_clone_and_update_fork(mock_git_repo_basepath):
     fork_url = "https://gitlab.com/ai-bot/centos_rpms_bash.git"
     parent = "https://gitlab.com/centos-stream/rpms/bash"
     branch = "rhel-8.10.0"

@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 import re
-from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
 
@@ -14,10 +13,10 @@ from ogr.services.gitlab.project import GitlabProject
 from pydantic import Field
 
 from common.validators import AbsolutePath
+from utils import clean_stale_repositories
 
 
 logger = logging.getLogger(__name__)
-
 
 def _get_authenticated_url(repository_url: str) -> str:
     """
@@ -157,6 +156,9 @@ async def clone_and_update_fork(
     Clones the specified fork to the given local path and updates the cloned branch
     to match the parent repository.
     """
+    # Clean up old repositories before cloning
+    await clean_stale_repositories()
+
     command = [
         "git",
         "clone",

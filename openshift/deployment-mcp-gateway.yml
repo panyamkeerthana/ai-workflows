@@ -44,6 +44,12 @@ spec:
               key: KRB5CCNAME
               name: mcp-gateway
 
+        - name: GIT_REPO_BASEPATH
+          valueFrom:
+            configMapKeyRef:
+              key: GIT_REPO_BASEPATH
+              name: x-beeai-agent-configmap
+
         - name: GITLAB_TOKEN
           valueFrom:
             secretKeyRef:
@@ -75,7 +81,7 @@ spec:
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
         volumeMounts:
-        - mountPath: /git-repos
+        - mountPath: $(GIT_REPO_BASEPATH)
           name: mcp-server-git-repos
         - mountPath: /home/mcp/mcp-server-keytab
           name: mcp-server-keytab
