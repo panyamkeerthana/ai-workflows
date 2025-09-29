@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from enum import StrEnum
 from functools import cache
 import logging
@@ -77,6 +78,10 @@ def get_erratum(erratum_id: str | int):
         for jira_issue_data in jira_issues
     )
 
+    last_status_transition_timestamp = datetime.strptime(
+        details["status_updated_at"], "%Y-%m-%dT%H:%M:%SZ"
+    ).replace(tzinfo=timezone.utc)
+
     return Erratum(
         id=details["id"],
         full_advisory=details["fulladvisory"],
@@ -84,6 +89,7 @@ def get_erratum(erratum_id: str | int):
         synopsis=details["synopsis"],
         status=ErrataStatus(details["status"]),
         all_issues_release_pending=all_issues_release_pending,
+        last_status_transition_timestamp=last_status_transition_timestamp,
     )
 
 

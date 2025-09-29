@@ -1,8 +1,9 @@
 from datetime import datetime
 from enum import StrEnum
 from typing import Optional
-from typing_extensions import Literal
+
 from pydantic import BaseModel, Field
+from typing_extensions import Literal
 
 
 class IssueStatus(StrEnum):
@@ -47,6 +48,7 @@ class Erratum(BaseModel):
     synopsis: str
     status: ErrataStatus
     all_issues_release_pending: bool
+    last_status_transition_timestamp: datetime
 
 
 class MergeRequestState(StrEnum):
