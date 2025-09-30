@@ -81,7 +81,7 @@ spec:
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
         volumeMounts:
-        - mountPath: $(GIT_REPO_BASEPATH)
+        - mountPath: /git-repos  # NOTE: This path must match GIT_REPO_BASEPATH in x-beeai-agent-configmap
           name: mcp-server-git-repos
         - mountPath: /home/mcp/mcp-server-keytab
           name: mcp-server-keytab
