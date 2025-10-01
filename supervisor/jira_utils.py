@@ -63,9 +63,9 @@ def jira_headers() -> dict[str, str]:
     }
 
 
-def jira_api_get(path: str) -> Any:
+def jira_api_get(path: str, *, params: dict | None = None) -> Any:
     url = f"{jira_url()}/rest/api/2/{path}"
-    response = requests_session().get(url, headers=jira_headers())
+    response = requests_session().get(url, headers=jira_headers(), params=params)
     response.raise_for_status()
     return response.json()
 
@@ -195,6 +195,9 @@ def get_issue(issue_key: str, full: Literal[True]) -> FullIssue: ...
 
 def get_issue(issue_key: str, full: bool = False) -> Issue | FullIssue:
     path = f"issue/{urlquote(issue_key)}?fields={','.join(_fields(full))}"
+    # Passing fields using the params dict caused the response time to increase;
+    # perhaps the JIRA server isn't properly decoding encoded `,` characters and ignoring
+    # fields, so we build the URL ourselves
     response_data = jira_api_get(path)
     return decode_issue(response_data, full)
 
@@ -337,8 +340,8 @@ def change_issue_status(
     *,
     dry_run: bool = False,
 ) -> None:
-    path = f"issue/{urlquote(issue_key)}/transitions?expand=transitions.fields"
-    response_data = jira_api_get(path)
+    path = f"issue/{urlquote(issue_key)}/transitions"
+    response_data = jira_api_get(path, params={"expand": "transitions.fields"})
 
     status_str = str(new_status)
     transition = None
@@ -390,8 +393,7 @@ def add_issue_label(
 
 @cache
 def get_user_name(email: str) -> str:
-    path = f"user/search?username={urlquote(email)}"
-    users = jira_api_get(path)
+    users = jira_api_get("user/search", params={"username": email})
     if len(users) == 0:
         raise ValueError(f"No JIRA user with email {email}")
     elif len(users) > 1:
