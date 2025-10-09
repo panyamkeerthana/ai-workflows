@@ -89,4 +89,8 @@ async def get_qe_data(component: str) -> TestLocationInfo:
         if k not in {"assigned_team", "organization"}
     }
 
+    # #test
+    # if component == "frr":
+    #     combined_values["test_trigger_method"] = "manual"
+
     return TestLocationInfo(**combined_values)

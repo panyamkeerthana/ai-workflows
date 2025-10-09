@@ -50,6 +50,10 @@ def render_prompt(input: InputSchema) -> str:
       Call the final_answer tool passing in the state and a comment as follows.
       The comment should use JIRA comment syntax.
 
+      If test_trigger_method is null/empty:
+         state: tests-not-running
+         comment: [explain that no method to trigger tests is provided]
+
       If the tests need to be started manually:
          state: tests-not-running
          comment: [explain what needs to be done to start tests]
@@ -95,10 +99,13 @@ async def analyze_issue(jira_issue: FullIssue, erratum: FullErratum | None) -> O
             raise ValueError("Agent did not return a result")
         return OutputSchema.model_validate_json(response.state.result.text)
 
+    test_location_info = await get_qe_data(jira_issue.components[0])
+    logger.info(f"QE data for component {jira_issue.components[0]}: {test_location_info.model_dump_json(indent=4)}")
+
     output = await run(
         InputSchema(
             issue=jira_issue,
-            test_location_info=await get_qe_data(jira_issue.components[0]),
+            test_location_info=test_location_info,
             erratum=erratum,
             current_time=datetime.now(timezone.utc),
         )

@@ -93,6 +93,8 @@ def get_erratum(erratum_id: str | int, full: bool = False) -> Erratum | FullErra
         details["status_updated_at"], "%Y-%m-%dT%H:%M:%SZ"
     ).replace(tzinfo=timezone.utc)
 
+    builds = get_erratum_builds(erratum_id)
+
     base_erratum = Erratum(
         id=details["id"],
         full_advisory=details["fulladvisory"],
@@ -101,6 +103,7 @@ def get_erratum(erratum_id: str | int, full: bool = False) -> Erratum | FullErra
         status=ErrataStatus(details["status"]),
         all_issues_release_pending=all_issues_release_pending,
         last_status_transition_timestamp=last_status_transition_timestamp,
+        builds=builds,
     )
 
     if full:
@@ -113,6 +116,24 @@ def get_erratum(erratum_id: str | int, full: bool = False) -> Erratum | FullErra
     else:
         return base_erratum
 
+
+def get_erratum_builds(erratum_id: str | int) -> list[str]:
+    """Get all builds (NVRs) attached to an erratum."""
+    logger.debug("Getting builds for erratum %s", erratum_id)
+    data = ET_api_get(f"erratum/{erratum_id}/builds")
+
+    builds = []
+    for product_data in data.items():
+        if isinstance(product_data, dict) and "builds" in product_data:
+            build_list = product_data["builds"]
+            if isinstance(build_list, list):
+                for build_item in build_list:
+                    if isinstance(build_item, dict):
+                        for nvr, build_details in build_item.items():
+                            if nvr and nvr not in builds:
+                                builds.append(nvr)
+    logger.debug(f"Found {len(builds)} builds for erratum {erratum_id}: {builds}")
+    return builds
 
 def get_erratum_comments(erratum_id: str | int) -> list[Comment] | None:
     """Get all comments for an erratum with the given erratum_id"""

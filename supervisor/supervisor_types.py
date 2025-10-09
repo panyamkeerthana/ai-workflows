@@ -55,6 +55,7 @@ class Erratum(BaseModel):
     status: ErrataStatus
     all_issues_release_pending: bool
     last_status_transition_timestamp: datetime
+    builds: list[str] | None = None  # list of nvr attached to erratum
 
 class FullErratum(Erratum):
     comments: list[Comment] | None = None
